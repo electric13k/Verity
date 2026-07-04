@@ -1,6 +1,6 @@
-# AI Orchestrator Setup Guide
+# Verity Setup Guide
 
-A production-grade local-first AI orchestration web app.
+Verity is a calm, precise, and trustworthy multi-model AI orchestration platform. It allows you to ask questions that are checked against multiple AIs, verified, and merged into one truth.
 
 ## Prerequisites
 - Node.js 20+
@@ -24,6 +24,12 @@ cp .env.example .env
 # openssl rand -hex 32
 npm run dev
 ```
+
+### Troubleshooting better-sqlite3 on Windows
+If you encounter errors installing `better-sqlite3`, ensure you have:
+1. [Visual Studio Build Tools](https://visualstudio.microsoft.com/visual-cpp-build-tools/) installed with "Desktop development with C++".
+2. Node.js 20+ installed.
+3. If errors persist, try: `npm install --build-from-source` inside the backend directory.
 
 ### 3. Frontend Setup
 ```bash

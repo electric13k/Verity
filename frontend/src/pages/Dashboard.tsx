@@ -49,9 +49,9 @@ const Dashboard: React.FC = () => {
         </div>
         <Link 
           to="/tasks" 
-          className="px-4 py-2 bg-indigo-600 text-white rounded-lg font-medium hover:bg-indigo-700 transition-colors flex items-center gap-2"
+          className="px-4 py-2 bg-matcha text-white rounded-lg font-medium hover:bg-matcha/90 transition-colors flex items-center gap-2 glass-btn"
         >
-          New Task <ArrowRight size={18} />
+          Ask Verity <ArrowRight size={18} />
         </Link>
       </div>
 

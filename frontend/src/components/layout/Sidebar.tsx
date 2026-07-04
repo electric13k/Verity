@@ -24,8 +24,8 @@ const Sidebar: React.FC = () => {
       sidebarOpen ? "w-64" : "w-20"
     )}>
       <div className="p-6 flex items-center gap-3">
-        <div className="w-8 h-8 bg-indigo-600 rounded-lg flex items-center justify-center text-white font-bold">O</div>
-        {sidebarOpen && <span className="text-xl font-bold text-slate-900 dark:text-white">Orchestrator</span>}
+        <div className="w-8 h-8 bg-matcha rounded-lg flex items-center justify-center text-white font-bold">V</div>
+        {sidebarOpen && <span className="text-xl font-bold text-slate-900 dark:text-white">Verity</span>}
       </div>
 
       <nav className="flex-1 px-4 py-4 space-y-2">
@@ -36,7 +36,7 @@ const Sidebar: React.FC = () => {
             className={({ isActive }) => clsx(
               "flex items-center gap-3 px-3 py-2 rounded-lg transition-colors",
               isActive 
-                ? "bg-indigo-50 dark:bg-indigo-900/30 text-indigo-600 dark:text-indigo-400" 
+                ? "bg-matcha/10 text-matcha" 
                 : "text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800"
             )}
           >

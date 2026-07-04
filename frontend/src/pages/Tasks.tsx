@@ -29,8 +29,8 @@ const Tasks: React.FC = () => {
   return (
     <div className="h-full flex flex-col gap-6">
       <div>
-        <h1 className="text-2xl font-bold text-slate-900 dark:text-white">Task Composer</h1>
-        <p className="text-slate-500 dark:text-slate-400">Orchestrate multiple AI agents to solve complex problems</p>
+        <h1 className="text-2xl font-bold text-slate-900 dark:text-white">Ask Verity</h1>
+        <p className="text-slate-500 dark:text-slate-400">Verity assigns the right AI agents, checks their work, and merges it into one answer.</p>
       </div>
 
       <div className="flex-1 grid grid-cols-1 lg:grid-cols-2 gap-6 min-h-0">
@@ -64,7 +64,7 @@ const Tasks: React.FC = () => {
             <button
               type="submit"
               disabled={loading}
-              className="w-full py-3 bg-indigo-600 hover:bg-indigo-700 text-white font-semibold rounded-lg shadow-lg shadow-indigo-500/30 transition-all flex items-center justify-center gap-2 disabled:opacity-50"
+              className="w-full py-3 bg-matcha hover:bg-matcha/90 text-white font-semibold rounded-lg shadow-lg shadow-matcha/30 transition-all flex items-center justify-center gap-2 disabled:opacity-50 glass-btn"
             >
               {loading ? (
                 <>
@@ -74,7 +74,7 @@ const Tasks: React.FC = () => {
               ) : (
                 <>
                   <Send size={20} />
-                  Execute Orchestration
+                  Ask Verity
                 </>
               )}
             </button>

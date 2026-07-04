@@ -35,10 +35,10 @@ const Login: React.FC = () => {
     <div className="min-h-screen bg-slate-50 dark:bg-slate-950 flex items-center justify-center p-4">
       <div className="max-w-md w-full bg-white dark:bg-slate-900 rounded-2xl shadow-xl border border-slate-200 dark:border-slate-800 p-8">
         <div className="flex flex-col items-center mb-8">
-          <div className="w-12 h-12 bg-indigo-600 rounded-xl flex items-center justify-center text-white mb-4">
+          <div className="w-12 h-12 bg-matcha rounded-xl flex items-center justify-center text-white mb-4">
             <Zap size={28} />
           </div>
-          <h1 className="text-2xl font-bold text-slate-900 dark:text-white">AI Orchestrator</h1>
+          <h1 className="text-2xl font-bold text-slate-900 dark:text-white">Verity</h1>
           <p className="text-slate-500 dark:text-slate-400 mt-2">
             {isLogin ? 'Welcome back to your local console' : 'Create your local orchestration account'}
           </p>
@@ -85,7 +85,7 @@ const Login: React.FC = () => {
           <button
             type="submit"
             disabled={loading}
-            className="w-full py-3 bg-indigo-600 hover:bg-indigo-700 text-white font-semibold rounded-lg shadow-lg shadow-indigo-500/30 transition-all disabled:opacity-50"
+            className="w-full py-3 bg-matcha hover:bg-matcha/90 text-white font-semibold rounded-lg shadow-lg shadow-matcha/30 transition-all disabled:opacity-50 glass-btn"
           >
             {loading ? 'Processing...' : (isLogin ? 'Sign In' : 'Create Account')}
           </button>

@@ -16,7 +16,7 @@ const Header: React.FC = () => {
         >
           <Menu size={20} />
         </button>
-        <h2 className="text-lg font-semibold text-slate-900 dark:text-white">AI Orchestration Console</h2>
+        <h2 className="text-lg font-semibold text-slate-900 dark:text-white">Verity Console</h2>
       </div>
 
       <div className="flex items-center gap-4">
