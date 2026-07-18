@@ -8,6 +8,8 @@ dependencies = [
     "pydantic>=2.9",
     "pydantic-settings>=2.5",
     "uvicorn>=0.30",
+    "grpcio>=1.60",
+    "protobuf>=4.25",
 ]
 
 [project.optional-dependencies]

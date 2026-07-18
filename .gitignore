@@ -33,8 +33,6 @@ Thumbs.db
 # --- v2 monorepo ---
 # generated design tokens
 packages/tokens/dist/
-# generated gRPC code
-packages/proto/gen/
 # Next.js
 apps/web/.next/
 apps/web/out/

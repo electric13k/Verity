@@ -16,11 +16,10 @@ import (
 const version = "0.1.0"
 
 // optionalConfig lists env vars the gateway can start without. Anything
-// missing is surfaced in /healthz, never fatal.
+// missing is surfaced in /healthz, never fatal. (Service addresses have
+// Stage A localhost defaults and are not listed.)
 var optionalConfig = []string{
 	"REDIS_URL",        // rate-limit buckets, SSE resume (M2)
-	"BRAIN_GRPC_ADDR",  // brain service (M1)
-	"CORE_GRPC_ADDR",   // core service (M1)
 	"CLERK_SECRET_KEY", // session verification (M2)
 }
 
@@ -64,6 +63,14 @@ func main() {
 			"missing_config": missing,
 		})
 	})
+
+	sp, err := newSpine()
+	if err != nil {
+		// Law: degrade, never die — routes answer 503 until brain appears.
+		slog.Warn("spine unavailable", "err", err)
+	} else {
+		sp.registerRoutes(app)
+	}
 
 	addr := os.Getenv("GATEWAY_ADDR")
 	if addr == "" {

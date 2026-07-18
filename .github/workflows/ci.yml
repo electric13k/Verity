@@ -61,6 +61,8 @@ jobs:
       - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
         with: { workspaces: services/core }
+      # tonic-build (build.rs) generates Rust stubs from packages/proto
+      - run: sudo apt-get update && sudo apt-get install -y protobuf-compiler
       - run: cargo check --all-targets
       - run: cargo install cargo-audit --locked && cargo audit || true
 

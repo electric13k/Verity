@@ -5,8 +5,8 @@ Tracking against [`MASTER_PLAN.md`](MASTER_PLAN.md) §7.
 | # | Milestone | Status | Notes |
 |---|---|---|---|
 | M0 | Scaffold + tooling | ✅ done | repo tree, compose (pg/redis/qdrant/cognee), proto contracts, tokens package, `/supercode`, CI |
-| M1 | Inter-service spine | 🔜 next | Go↔Python↔Rust gRPC hello-path (healthz-degrades pattern already in place from M0) |
-| M2 | Security plumbing | ⬜ | Clerk end-to-end, schema v1, validation, rate limits, AES key vault |
+| M1 | Inter-service spine | ✅ done | gateway→brain→core gRPC hello-path verified E2E; request-id propagated in metadata; Go/Python stubs committed, Rust via tonic-build |
+| M2 | Security plumbing | 🔜 next | Clerk end-to-end, schema v1, validation, rate limits, AES key vault |
 | M3 | AI pipeline | ⬜ | providers, chat SSE, cognee brains, refiner, confidence, Qdrant tenant filters |
 | M4 | UI assembly | ⬜ | design system, glass components, chat/flow/office UIs, branching, upload, PWA |
 | M5 | Platform | ⬜ | plugins/skills executor, MCP client, data-driven flow definitions |
