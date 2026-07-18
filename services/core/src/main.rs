@@ -9,6 +9,7 @@ use axum::{routing::get, Json, Router};
 use serde::Serialize;
 use tonic::{transport::Server, Request, Response, Status};
 
+mod consensus;
 mod qdrant;
 
 pub mod pb {
