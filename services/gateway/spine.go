@@ -27,17 +27,29 @@ func envOr(key, fallback string) string {
 
 type spine struct {
 	brain verityv1.BrainServiceClient
+	// coord is the compute-network coordinator, served by the Rust core. Only
+	// the user-facing SubmitJob is exposed through the gateway; node-facing
+	// RPCs (register/claim/result) are spoken directly by the node daemon.
+	coord verityv1.CoordinatorServiceClient
 }
 
-// newSpine dials brain lazily (grpc.NewClient connects on first RPC), so a
-// missing brain degrades requests, never boot. mTLS lands at Stage C.
+// newSpine dials brain and core lazily (grpc.NewClient connects on first RPC),
+// so a missing upstream degrades requests, never boot. mTLS lands at Stage C.
 func newSpine() (*spine, error) {
 	brainAddr := envOr("BRAIN_GRPC_ADDR", "127.0.0.1:9100")
-	conn, err := grpc.NewClient(brainAddr, grpc.WithTransportCredentials(insecure.NewCredentials()))
+	brainConn, err := grpc.NewClient(brainAddr, grpc.WithTransportCredentials(insecure.NewCredentials()))
 	if err != nil {
 		return nil, err
 	}
-	return &spine{brain: verityv1.NewBrainServiceClient(conn)}, nil
+	coreAddr := envOr("CORE_GRPC_ADDR", "127.0.0.1:9200")
+	coreConn, err := grpc.NewClient(coreAddr, grpc.WithTransportCredentials(insecure.NewCredentials()))
+	if err != nil {
+		return nil, err
+	}
+	return &spine{
+		brain: verityv1.NewBrainServiceClient(brainConn),
+		coord: verityv1.NewCoordinatorServiceClient(coreConn),
+	}, nil
 }
 
 // outgoingCtx carries the tenant ctx and request id downstream. This is

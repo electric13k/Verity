@@ -1,0 +1,104 @@
+syntax = "proto3";
+
+package verity.v1;
+
+import "verity/v1/common.proto";
+
+option go_package = "github.com/electric13k/verity/packages/proto/gen/go/verity/v1;verityv1";
+
+// Coordinator: the server-side surface of the scattered-compute network
+// (M7). Lives in the Rust core service alongside the consensus verifier.
+//
+// Two audiences, one law: tenant / owner identity is ALWAYS taken from
+// gateway-injected gRPC metadata (x-verity-user-id), NEVER from a request
+// body. A node_id in a request body is only a handle; the coordinator binds
+// every node operation to the owner in metadata and to the owner stored at
+// registration, and fails closed when they disagree.
+//
+//   User-facing (tenant = job owner):   SubmitJob
+//   Node-facing (owner = node owner):   RegisterNode, ClaimWork,
+//                                       SubmitResult, GetCredits
+//
+// Redundancy-2 + consensus: each work unit is assigned to exactly two nodes
+// with DIFFERENT owners (sybil-pair guard, enforced at claim time). Honest
+// nodes run temp-0 seed-7 inference, so byte-identical output is the
+// consensus criterion. Agreement credits both nodes; disagreement credits
+// neither and frees the unit for reassignment. Node output is UNTRUSTED
+// external content: the coordinator only hashes it for comparison and never
+// feeds it into a prompt.
+service CoordinatorService {
+  rpc Health(HealthRequest) returns (HealthResponse);
+
+  // User-facing: submit an inference job. Tenant (job owner) comes from
+  // metadata. Creates the job and its work unit(s).
+  rpc SubmitJob(SubmitJobRequest) returns (SubmitJobResponse);
+
+  // Node-facing: a volunteer daemon announces itself. Owner comes from
+  // metadata; the returned node_id is the handle used by later calls.
+  rpc RegisterNode(RegisterNodeRequest) returns (RegisterNodeResponse);
+
+  // Node-facing: claim one unit of work. The coordinator applies the
+  // redundancy-2 cap and the sybil-pair guard; may return has_work=false.
+  rpc ClaimWork(ClaimWorkRequest) returns (ClaimWorkResponse);
+
+  // Node-facing: submit the deterministic output for a claimed unit. When
+  // both assignments are in, the coordinator runs consensus and writes the
+  // credit ledger.
+  rpc SubmitResult(SubmitResultRequest) returns (SubmitResultResponse);
+
+  // Node-facing: read the node's current credit balance (the credit
+  // acknowledgement the daemon polls for).
+  rpc GetCredits(GetCreditsRequest) returns (GetCreditsResponse);
+}
+
+message SubmitJobRequest {
+  string model  = 1;   // GGUF model selector the job needs
+  string prompt = 2;   // the inference prompt (job owner's own content)
+}
+
+message SubmitJobResponse {
+  string job_id       = 1;
+  string work_unit_id = 2;
+}
+
+message RegisterNodeRequest {
+  string name             = 1;
+  string platform         = 2;   // os/arch reported by the daemon
+  repeated string models  = 3;   // GGUF models the node can serve
+}
+
+message RegisterNodeResponse {
+  string node_id = 1;
+}
+
+message ClaimWorkRequest {
+  string node_id = 1;   // handle; ownership re-checked against metadata
+}
+
+message ClaimWorkResponse {
+  bool   has_work     = 1;
+  string work_unit_id = 2;
+  string model        = 3;
+  string prompt       = 4;   // the input to run; opaque to the node executor
+}
+
+message SubmitResultRequest {
+  string node_id      = 1;
+  string work_unit_id = 2;
+  string output       = 3;   // deterministic model output; coordinator hashes it
+}
+
+message SubmitResultResponse {
+  // pending  = first of two results in, awaiting the pair
+  // verified = consensus reached, both nodes credited
+  // conflicted = digests disagreed, unit freed for reassignment
+  string verdict = 1;
+}
+
+message GetCreditsRequest {
+  string node_id = 1;
+}
+
+message GetCreditsResponse {
+  int64 balance = 1;   // sum of ledger deltas for this node
+}

@@ -1,12 +1,16 @@
 [package]
-name = "verity-core"
+name = "verity-node"
 version = "0.1.0"
 edition = "2021"
-description = "Verity core — Qdrant vector search proxy, embedding pipelines, consensus verification"
+description = "Verity compute node daemon — volunteer BOINC-style worker for the scattered-compute network (M7)"
+
+[[bin]]
+name = "verity-node"
+path = "src/main.rs"
 
 [dependencies]
 axum = "0.8"
-tokio = { version = "1", features = ["rt-multi-thread", "macros", "net"] }
+tokio = { version = "1", features = ["rt-multi-thread", "macros", "net", "time"] }
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 tracing = "0.1"
@@ -14,7 +18,6 @@ tracing-subscriber = { version = "0.3", features = ["json"] }
 tonic = "0.12"
 prost = "0.13"
 reqwest = { version = "0.12", default-features = false, features = ["json", "rustls-tls"] }
-sqlx = { version = "0.8", default-features = false, features = ["runtime-tokio-rustls", "postgres", "uuid"] }
 sha2 = "0.10"
 hex = "0.4"
 uuid = { version = "1", features = ["v4"] }

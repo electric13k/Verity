@@ -10,19 +10,22 @@ use serde::Serialize;
 use tonic::{transport::Server, Request, Response, Status};
 
 mod consensus;
+mod coordinator;
 mod qdrant;
 
 pub mod pb {
     tonic::include_proto!("verity.v1");
 }
 
+use coordinator::CoordinatorGrpc;
+use pb::coordinator_service_server::CoordinatorServiceServer;
 use pb::core_service_server::{CoreService, CoreServiceServer};
 
 const VERSION: &str = env!("CARGO_PKG_VERSION");
 
 /// Env vars core can start without; absence is reported, never fatal.
 /// (Addresses have Stage A defaults and are not listed.)
-const OPTIONAL_CONFIG: &[&str] = &["QDRANT_URL"];
+const OPTIONAL_CONFIG: &[&str] = &["QDRANT_URL", "DATABASE_URL"];
 
 fn missing_config() -> Vec<String> {
     OPTIONAL_CONFIG
@@ -157,6 +160,26 @@ async fn main() {
         tracing::warn!(?missing, "starting degraded");
     }
 
+    // Compute-network coordinator DB pool. Boot degrades, never dies: without
+    // DATABASE_URL the pool is None and coordinator RPCs answer UNAVAILABLE.
+    let pool = match std::env::var("DATABASE_URL").ok().filter(|v| !v.is_empty()) {
+        Some(url) => match sqlx::postgres::PgPoolOptions::new()
+            .max_connections(8)
+            .connect(&url)
+            .await
+        {
+            Ok(p) => {
+                tracing::info!("coordinator db pool ready");
+                Some(p)
+            }
+            Err(e) => {
+                tracing::warn!(error = %e, "DATABASE_URL set but unreachable; coordinator degraded");
+                None
+            }
+        },
+        None => None,
+    };
+
     // HTTP healthz
     let http_addr = std::env::var("CORE_HTTP_ADDR").unwrap_or_else(|_| "127.0.0.1:8200".into());
     let app = Router::new().route("/healthz", get(healthz));
@@ -176,6 +199,7 @@ async fn main() {
     tracing::info!(%grpc_addr, "core grpc listening");
     Server::builder()
         .add_service(CoreServiceServer::new(CoreGrpc))
+        .add_service(CoordinatorServiceServer::new(CoordinatorGrpc::new(pool)))
         .serve(grpc_addr)
         .await
         .expect("grpc server exited");

@@ -78,6 +78,7 @@ func main() {
 		sp.registerRoutes(v1)
 		sp.registerChat(v1)
 		sp.registerFlows(v1)
+		sp.registerCompute(v1)
 	}
 
 	addr := os.Getenv("GATEWAY_ADDR")

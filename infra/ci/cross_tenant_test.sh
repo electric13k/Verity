@@ -23,6 +23,9 @@ PY="${PYTHON:-python3}"
     "tests/test_pipeline.py::test_memory_isolation_between_users" -q)
 
 echo "== core wrong-user corpus (tenant filter mandatory, fail closed)"
-(cd services/core && cargo test qdrant:: --quiet)
+# qdrant:: — mandatory tenant payload filter; coordinator:: — compute-network
+# surface refuses work without gateway-injected identity (and degrades, never
+# dies, when the datastore is absent).
+(cd services/core && cargo test --quiet -- qdrant:: coordinator::)
 
 echo "cross-tenant: all wrong-user checks passed"
