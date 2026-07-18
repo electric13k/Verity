@@ -29,3 +29,23 @@ Thumbs.db
 .idea/
 *.swp
 *.swo
+
+# --- v2 monorepo ---
+# generated design tokens
+packages/tokens/dist/
+# generated gRPC code
+packages/proto/gen/
+# Next.js
+apps/web/.next/
+apps/web/out/
+apps/web/next-env.d.ts
+apps/web/*.tsbuildinfo
+# Rust
+services/core/target/
+# Python
+__pycache__/
+*.pyc
+.venv/
+*.egg-info/
+# Go build output
+services/gateway/gateway

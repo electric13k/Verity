@@ -1,0 +1,32 @@
+syntax = "proto3";
+
+package verity.v1;
+
+option go_package = "github.com/electric13k/verity/packages/proto/gen/go/verity/v1;verityv1";
+
+// TenantCtx is constructed ONLY by the gateway from a verified session and
+// injected into gRPC metadata (keys: "x-verity-user-id", "x-verity-org-id",
+// "x-verity-request-id"). Brain and core MUST derive tenant identity from
+// metadata — never from request bodies. This message exists for typed
+// plumbing inside services after extraction.
+message TenantCtx {
+  string user_id = 1;
+  string org_id = 2;
+  string request_id = 3;
+}
+
+message HealthRequest {}
+
+// Boot degrades, never dies: services always answer health, listing exactly
+// which optional config is missing instead of refusing to start.
+message HealthResponse {
+  enum Status {
+    STATUS_UNSPECIFIED = 0;
+    STATUS_OK = 1;
+    STATUS_DEGRADED = 2;
+  }
+  Status status = 1;
+  string service = 2;
+  string version = 3;
+  repeated string missing_config = 4;
+}

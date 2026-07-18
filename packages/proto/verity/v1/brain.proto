@@ -1,0 +1,55 @@
+syntax = "proto3";
+
+package verity.v1;
+
+import "verity/v1/common.proto";
+
+option go_package = "github.com/electric13k/verity/packages/proto/gen/go/verity/v1;verityv1";
+
+// Brain: Python orchestration service (chat, flows, offices, memory, providers).
+// Called by the gateway only. Tenant identity comes from gRPC metadata.
+service BrainService {
+  rpc Health(HealthRequest) returns (HealthResponse);
+
+  // M1 hello-path: gateway → brain round trip proving the spine.
+  rpc Hello(HelloRequest) returns (HelloResponse);
+
+  // Chat streaming (M3). One request, server-streamed chunks; the gateway
+  // fans out to the client as SSE.
+  rpc ChatStream(ChatRequest) returns (stream ChatChunk);
+}
+
+message HelloRequest {
+  string message = 1;
+}
+
+message HelloResponse {
+  string message = 1;
+  // Set when brain successfully round-trips through core (M1 full spine).
+  string core_echo = 2;
+}
+
+message ChatRequest {
+  string conversation_id = 1;
+  string user_message = 2;
+  string model = 3;          // provider:model selector; empty = default
+  bool use_memory = 4;       // consult brains (cognee) before answering
+}
+
+message ChatChunk {
+  oneof payload {
+    string delta = 1;            // text delta
+    ChatUsage usage = 2;         // terminal chunk
+    ChatConfidence confidence = 3;
+  }
+}
+
+message ChatUsage {
+  uint32 input_tokens = 1;
+  uint32 output_tokens = 2;
+}
+
+message ChatConfidence {
+  uint32 score = 1;  // 0-100, RRR protocol
+  string rationale = 2;
+}

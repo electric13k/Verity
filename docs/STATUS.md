@@ -1,0 +1,28 @@
+# Verity v2 — Milestone Status
+
+Tracking against [`MASTER_PLAN.md`](MASTER_PLAN.md) §7.
+
+| # | Milestone | Status | Notes |
+|---|---|---|---|
+| M0 | Scaffold + tooling | ✅ done | repo tree, compose (pg/redis/qdrant/cognee), proto contracts, tokens package, `/supercode`, CI |
+| M1 | Inter-service spine | 🔜 next | Go↔Python↔Rust gRPC hello-path (healthz-degrades pattern already in place from M0) |
+| M2 | Security plumbing | ⬜ | Clerk end-to-end, schema v1, validation, rate limits, AES key vault |
+| M3 | AI pipeline | ⬜ | providers, chat SSE, cognee brains, refiner, confidence, Qdrant tenant filters |
+| M4 | UI assembly | ⬜ | design system, glass components, chat/flow/office UIs, branching, upload, PWA |
+| M5 | Platform | ⬜ | plugins/skills executor, MCP client, data-driven flow definitions |
+| M6 | Hardening + deploy | ⬜ | Pages, VPC, WAF, mTLS, CSP, pen-test — **v1 retirement gate** |
+| M7 | Compute network | ⬜ | swarm port, node daemon, credits |
+| M8 | Apps | ⬜ | Tauri v2 desktop + mobile |
+| M9 | Marketing | ⬜ | sizzles, screens, brand kit, launch landing |
+
+## Open user gates (blocking future milestones, not current work)
+
+- Clerk account + keys · Cloudflare account · Figma auth for the MCP token sync
+- GPU rental + HF token (verity-9b) · Ollama Cloud key (house models)
+- §5 training-data legality decision (plan assumes the safe/open path)
+- Signing certs + store accounts (M8) · counsel review of legal pages
+
+## Notes
+
+- Dev container Python is 3.11; plan targets 3.12 — `requires-python = ">=3.11"` for now, bump at Stage B deploy.
+- v1 prototype (`backend/`, `frontend/`, `SETUP.md`) is frozen in place until the M6 gate.

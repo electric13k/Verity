@@ -1,0 +1,46 @@
+syntax = "proto3";
+
+package verity.v1;
+
+import "verity/v1/common.proto";
+
+option go_package = "github.com/electric13k/verity/packages/proto/gen/go/verity/v1;verityv1";
+
+// Core: Rust service — Qdrant vector search proxy, embedding pipelines,
+// consensus verification. Every vector query carries a mandatory payload
+// filter user_id == tenant_ctx.user_id, constructed in this service from
+// gRPC metadata ONLY (never from request bodies).
+service CoreService {
+  rpc Health(HealthRequest) returns (HealthResponse);
+
+  // M1 hello-path.
+  rpc Echo(EchoRequest) returns (EchoResponse);
+
+  // Vector search (M3). collection is a logical name; tenant filter is
+  // applied server-side unconditionally.
+  rpc VectorSearch(VectorSearchRequest) returns (VectorSearchResponse);
+}
+
+message EchoRequest {
+  string message = 1;
+}
+
+message EchoResponse {
+  string message = 1;
+}
+
+message VectorSearchRequest {
+  string collection = 1;
+  repeated float vector = 2;
+  uint32 limit = 3;
+}
+
+message VectorSearchResponse {
+  repeated ScoredPoint points = 1;
+}
+
+message ScoredPoint {
+  string id = 1;
+  float score = 2;
+  string payload_json = 3;
+}

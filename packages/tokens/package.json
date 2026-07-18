@@ -1,0 +1,11 @@
+{
+  "name": "@verity/tokens",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Verity design tokens (Gallery Matcha) — JSON source of truth, CSS vars output, Figma variables sync",
+  "scripts": {
+    "build": "node build.mjs"
+  },
+  "files": ["tokens.json", "dist"]
+}

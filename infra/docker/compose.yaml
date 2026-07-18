@@ -1,0 +1,63 @@
+# Verity v2 — Stage A infrastructure. One box, real boundaries.
+# Usage: docker compose -f infra/docker/compose.yaml up -d
+#
+# No secrets in this file. Passwords below are local-dev only; production
+# uses managed services (Stage B) and user-supplied secrets.
+name: verity
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: verity
+      POSTGRES_PASSWORD: verity_local_dev
+      POSTGRES_DB: verity
+    ports:
+      - "127.0.0.1:5432:5432"
+    volumes:
+      - pg_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U verity"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  redis:
+    image: redis:7-alpine
+    command: ["redis-server", "--appendonly", "yes"]
+    ports:
+      - "127.0.0.1:6379:6379"
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  qdrant:
+    image: qdrant/qdrant:latest
+    ports:
+      - "127.0.0.1:6333:6333" # REST
+      - "127.0.0.1:6334:6334" # gRPC
+    volumes:
+      - qdrant_data:/qdrant/storage
+
+  # cognee — primary memory engine (dataset-per-user isolation).
+  # Self-hosted API server; brain talks to it over HTTP.
+  cognee:
+    image: cognee/cognee:main
+    environment:
+      # cognee's own storage; kept separate from the app's postgres.
+      DB_PROVIDER: sqlite
+      VECTOR_DB_PROVIDER: lancedb
+    ports:
+      - "127.0.0.1:8765:8000"
+    volumes:
+      - cognee_data:/app/.cognee_system
+
+volumes:
+  pg_data:
+  redis_data:
+  qdrant_data:
+  cognee_data:

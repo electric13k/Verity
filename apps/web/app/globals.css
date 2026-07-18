@@ -1,0 +1,22 @@
+@import "tailwindcss";
+
+/* Design tokens are generated from packages/tokens (Gallery Matcha).
+   Both themes ship from day one; dark and light are equal citizens. */
+@import "../../../packages/tokens/dist/tokens.css";
+
+@theme inline {
+  --color-porcelain: var(--v-porcelain);
+  --color-bone: var(--v-bone);
+  --color-ink: var(--v-ink);
+  --color-matcha: var(--v-matcha);
+  --color-chai: var(--v-chai);
+  --color-brass: var(--v-brass);
+  --color-oxblood: var(--v-oxblood);
+  --color-fog: var(--v-fog);
+}
+
+body {
+  background: var(--v-porcelain);
+  color: var(--v-ink);
+  font-family: var(--v-font-body), system-ui, sans-serif;
+}
