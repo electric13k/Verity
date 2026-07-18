@@ -40,16 +40,22 @@ func newSpine() (*spine, error) {
 	return &spine{brain: verityv1.NewBrainServiceClient(conn)}, nil
 }
 
-// outgoingCtx carries the request id (and later tenant ctx) downstream.
+// outgoingCtx carries the tenant ctx and request id downstream. This is
+// the ONLY place verity metadata is written; brain and core trust it and
+// nothing else for identity.
 func outgoingCtx(c fiber.Ctx, timeout time.Duration) (context.Context, context.CancelFunc) {
 	ctx, cancel := context.WithTimeout(c.Context(), timeout)
-	md := metadata.Pairs("x-verity-request-id", requestid.FromContext(c))
+	md := metadata.Pairs(
+		"x-verity-request-id", requestid.FromContext(c),
+		"x-verity-user-id", currentUserID(c),
+		"x-verity-org-id", currentOrgID(c),
+	)
 	return metadata.NewOutgoingContext(ctx, md), cancel
 }
 
-func (s *spine) registerRoutes(app *fiber.App) {
+func (s *spine) registerRoutes(v1 fiber.Router) {
 	// M1 hello-path: proves gateway → brain → core round trip.
-	app.Get("/v1/hello", func(c fiber.Ctx) error {
+	v1.Get("/hello", func(c fiber.Ctx) error {
 		ctx, cancel := outgoingCtx(c, 5*time.Second)
 		defer cancel()
 		resp, err := s.brain.Hello(ctx, &verityv1.HelloRequest{Message: c.Query("message", "ping")})

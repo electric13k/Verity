@@ -6,7 +6,7 @@ Tracking against [`MASTER_PLAN.md`](MASTER_PLAN.md) §7.
 |---|---|---|---|
 | M0 | Scaffold + tooling | ✅ done | repo tree, compose (pg/redis/qdrant/cognee), proto contracts, tokens package, `/supercode`, CI |
 | M1 | Inter-service spine | ✅ done | gateway→brain→core gRPC hello-path verified E2E; request-id propagated in metadata; Go/Python stubs committed, Rust via tonic-build |
-| M2 | Security plumbing | 🔜 next | Clerk end-to-end, schema v1, validation, rate limits, AES key vault |
+| M2 | Security plumbing | ✅ done | fail-closed Clerk JWT verify (JWKS) + dev-mode escape, tenant_ctx metadata injection, schema v1 migration, strict validation, per-user token buckets, AES-256-GCM vault (AAD = user_id); wrong-user corpus green. Live Clerk E2E awaits user keys (gate) |
 | M3 | AI pipeline | ⬜ | providers, chat SSE, cognee brains, refiner, confidence, Qdrant tenant filters |
 | M4 | UI assembly | ⬜ | design system, glass components, chat/flow/office UIs, branching, upload, PWA |
 | M5 | Platform | ⬜ | plugins/skills executor, MCP client, data-driven flow definitions |

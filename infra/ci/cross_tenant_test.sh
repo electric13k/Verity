@@ -1,13 +1,24 @@
 #!/usr/bin/env bash
-# Cross-tenant isolation test harness.
+# Cross-tenant isolation corpus.
 #
-# From M2 onward this script runs the authenticated-as-wrong-user corpus:
-# every data-bearing endpoint is called with a valid session for user B
-# against resources owned by user A, and MUST return 403/404 — never data.
-# A forgotten tenant filter fails closed (gateway-injected tenant_ctx), and
-# this suite is the CI proof.
+# Today this runs the wrong-user unit corpus:
+#   - gateway: unconfigured auth fails closed (503); missing/garbage
+#     sessions are 401; per-user rate buckets don't bleed across users
+#   - brain: tenant ctx comes from gateway metadata only; requests without
+#     it abort UNAUTHENTICATED; vault ciphertexts are AAD-bound to their
+#     owner and fail to decrypt for any other user
+#
+# From M3+ (live DB + endpoints) this grows the authenticated-as-wrong-user
+# HTTP corpus: every data-bearing endpoint called with user B's valid
+# session against user A's resources must 403/404 — never data.
 set -euo pipefail
+cd "$(dirname "$0")/../.."
 
-echo "cross-tenant: no tenant-scoped surface exists yet (lands in M2)."
-echo "cross-tenant: this job is wired now so the gate cannot be forgotten later."
-exit 0
+echo "== gateway wrong-user corpus"
+(cd services/gateway && go test -run 'TestAuth|TestLimiter' ./...)
+
+echo "== brain wrong-user corpus"
+PY="${PYTHON:-python3}"
+(cd services/brain && "$PY" -m pytest tests/test_tenant.py tests/test_vault.py -q)
+
+echo "cross-tenant: all wrong-user checks passed"

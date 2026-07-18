@@ -64,12 +64,17 @@ func main() {
 		})
 	})
 
+	// Everything under /v1 requires a verified session (fail closed) and is
+	// rate limited per user. Route classes get their own buckets.
+	auth := newAuthenticator()
+	v1 := app.Group("/v1", auth.requireAuth(), rateLimit("api", 300, 60))
+
 	sp, err := newSpine()
 	if err != nil {
 		// Law: degrade, never die — routes answer 503 until brain appears.
 		slog.Warn("spine unavailable", "err", err)
 	} else {
-		sp.registerRoutes(app)
+		sp.registerRoutes(v1)
 	}
 
 	addr := os.Getenv("GATEWAY_ADDR")
