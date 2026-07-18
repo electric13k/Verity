@@ -9,6 +9,8 @@ use axum::{routing::get, Json, Router};
 use serde::Serialize;
 use tonic::{transport::Server, Request, Response, Status};
 
+mod qdrant;
+
 pub mod pb {
     tonic::include_proto!("verity.v1");
 }
@@ -95,11 +97,53 @@ impl CoreService for CoreGrpc {
 
     async fn vector_search(
         &self,
-        _req: Request<pb::VectorSearchRequest>,
+        req: Request<pb::VectorSearchRequest>,
     ) -> Result<Response<pb::VectorSearchResponse>, Status> {
-        // Lands in M3 with the mandatory tenant filter; refusing now is the
-        // fail-closed default.
-        Err(Status::unimplemented("vector_search lands in M3"))
+        // Tenant identity from metadata ONLY; fail closed without it.
+        let user_id = qdrant::tenant_user_id(req.metadata())?;
+        let qdrant_url = std::env::var("QDRANT_URL")
+            .ok()
+            .filter(|v| !v.is_empty())
+            .ok_or_else(|| Status::unavailable("vector search not configured (QDRANT_URL)"))?;
+
+        let r = req.into_inner();
+        if r.collection.is_empty() || r.vector.is_empty() {
+            return Err(Status::invalid_argument("collection and vector are required"));
+        }
+        let limit = if r.limit == 0 { 10 } else { r.limit.min(100) };
+        let body = qdrant::search_body(&user_id, &r.vector, limit);
+
+        let url = format!(
+            "{}/collections/{}/points/search",
+            qdrant_url.trim_end_matches('/'),
+            r.collection
+        );
+        let resp = reqwest::Client::new()
+            .post(&url)
+            .json(&body)
+            .send()
+            .await
+            .map_err(|e| Status::unavailable(format!("qdrant unreachable: {e}")))?;
+        if !resp.status().is_success() {
+            return Err(Status::unavailable(format!("qdrant status {}", resp.status())));
+        }
+        let parsed: serde_json::Value = resp
+            .json()
+            .await
+            .map_err(|_| Status::internal("qdrant response parse error"))?;
+        let points = parsed["result"]
+            .as_array()
+            .map(|arr| {
+                arr.iter()
+                    .map(|p| pb::ScoredPoint {
+                        id: p["id"].to_string(),
+                        score: p["score"].as_f64().unwrap_or(0.0) as f32,
+                        payload_json: p["payload"].to_string(),
+                    })
+                    .collect()
+            })
+            .unwrap_or_default();
+        Ok(Response::new(pb::VectorSearchResponse { points }))
     }
 }
 

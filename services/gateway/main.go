@@ -75,6 +75,7 @@ func main() {
 		slog.Warn("spine unavailable", "err", err)
 	} else {
 		sp.registerRoutes(v1)
+		sp.registerChat(v1)
 	}
 
 	addr := os.Getenv("GATEWAY_ADDR")

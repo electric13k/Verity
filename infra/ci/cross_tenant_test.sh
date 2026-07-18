@@ -19,6 +19,10 @@ echo "== gateway wrong-user corpus"
 
 echo "== brain wrong-user corpus"
 PY="${PYTHON:-python3}"
-(cd services/brain && "$PY" -m pytest tests/test_tenant.py tests/test_vault.py -q)
+(cd services/brain && "$PY" -m pytest tests/test_tenant.py tests/test_vault.py \
+    "tests/test_pipeline.py::test_memory_isolation_between_users" -q)
+
+echo "== core wrong-user corpus (tenant filter mandatory, fail closed)"
+(cd services/core && cargo test qdrant:: --quiet)
 
 echo "cross-tenant: all wrong-user checks passed"
