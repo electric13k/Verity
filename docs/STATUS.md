@@ -9,7 +9,7 @@ Tracking against [`MASTER_PLAN.md`](MASTER_PLAN.md) §7.
 | M2 | Security plumbing | ✅ done | fail-closed Clerk JWT verify (JWKS) + dev-mode escape, tenant_ctx metadata injection, schema v1 migration, strict validation, per-user token buckets, AES-256-GCM vault (AAD = user_id); wrong-user corpus green. Live Clerk E2E awaits user keys (gate) |
 | M3 | AI pipeline | ✅ done | providers (anthropic/openai-compat/ollama/house/echo-dev), chat SSE E2E with memory recall + learning loop, refiner, confidence, wrapUntrusted, Qdrant search with mandatory tenant filter. cognee = primary once its container is up (fallback store verified); live provider calls await user keys |
 | M4 | UI assembly | ⬜ | design system, glass components, chat/flow/office UIs, branching, upload, PWA |
-| M5 | Platform | ⬜ | plugins/skills executor, MCP client, data-driven flow definitions |
+| M5 | Platform | ✅ done (backend) | flow engine (conductor/workers/inspector, converge + diverge-converge, BOP-sanitized events) via /v1/flows SSE; offices with STATE.md checkpoints + per-user caps; SKILL.md/plugin.json loader + sandboxed script executor (path jail, env scrub, timeout); MCP HTTP client with per-call consent; gateway security headers. Frontend surfaces await M4 |
 | M6 | Hardening + deploy | ⬜ | Pages, VPC, WAF, mTLS, CSP, pen-test — **v1 retirement gate** |
 | M7 | Compute network | ⬜ | swarm port, node daemon, credits |
 | M8 | Apps | ⬜ | Tauri v2 desktop + mobile |

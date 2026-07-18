@@ -22,6 +22,7 @@ const (
 	BrainService_Health_FullMethodName     = "/verity.v1.BrainService/Health"
 	BrainService_Hello_FullMethodName      = "/verity.v1.BrainService/Hello"
 	BrainService_ChatStream_FullMethodName = "/verity.v1.BrainService/ChatStream"
+	BrainService_RunFlow_FullMethodName    = "/verity.v1.BrainService/RunFlow"
 )
 
 // BrainServiceClient is the client API for BrainService service.
@@ -37,6 +38,10 @@ type BrainServiceClient interface {
 	// Chat streaming (M3). One request, server-streamed chunks; the gateway
 	// fans out to the client as SSE.
 	ChatStream(ctx context.Context, in *ChatRequest, opts ...grpc.CallOption) (grpc.ServerStreamingClient[ChatChunk], error)
+	// Flow execution (M5): conductor/workers/inspector roles over a task,
+	// streamed phase by phase. Blind Orchestration Protocol applies: events
+	// crossing this boundary carry task substance, never machinery.
+	RunFlow(ctx context.Context, in *FlowRequest, opts ...grpc.CallOption) (grpc.ServerStreamingClient[FlowEvent], error)
 }
 
 type brainServiceClient struct {
@@ -86,6 +91,25 @@ func (c *brainServiceClient) ChatStream(ctx context.Context, in *ChatRequest, op
 // This type alias is provided for backwards compatibility with existing code that references the prior non-generic stream type by name.
 type BrainService_ChatStreamClient = grpc.ServerStreamingClient[ChatChunk]
 
+func (c *brainServiceClient) RunFlow(ctx context.Context, in *FlowRequest, opts ...grpc.CallOption) (grpc.ServerStreamingClient[FlowEvent], error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	stream, err := c.cc.NewStream(ctx, &BrainService_ServiceDesc.Streams[1], BrainService_RunFlow_FullMethodName, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	x := &grpc.GenericClientStream[FlowRequest, FlowEvent]{ClientStream: stream}
+	if err := x.ClientStream.SendMsg(in); err != nil {
+		return nil, err
+	}
+	if err := x.ClientStream.CloseSend(); err != nil {
+		return nil, err
+	}
+	return x, nil
+}
+
+// This type alias is provided for backwards compatibility with existing code that references the prior non-generic stream type by name.
+type BrainService_RunFlowClient = grpc.ServerStreamingClient[FlowEvent]
+
 // BrainServiceServer is the server API for BrainService service.
 // All implementations must embed UnimplementedBrainServiceServer
 // for forward compatibility.
@@ -99,6 +123,10 @@ type BrainServiceServer interface {
 	// Chat streaming (M3). One request, server-streamed chunks; the gateway
 	// fans out to the client as SSE.
 	ChatStream(*ChatRequest, grpc.ServerStreamingServer[ChatChunk]) error
+	// Flow execution (M5): conductor/workers/inspector roles over a task,
+	// streamed phase by phase. Blind Orchestration Protocol applies: events
+	// crossing this boundary carry task substance, never machinery.
+	RunFlow(*FlowRequest, grpc.ServerStreamingServer[FlowEvent]) error
 	mustEmbedUnimplementedBrainServiceServer()
 }
 
@@ -117,6 +145,9 @@ func (UnimplementedBrainServiceServer) Hello(context.Context, *HelloRequest) (*H
 }
 func (UnimplementedBrainServiceServer) ChatStream(*ChatRequest, grpc.ServerStreamingServer[ChatChunk]) error {
 	return status.Errorf(codes.Unimplemented, "method ChatStream not implemented")
+}
+func (UnimplementedBrainServiceServer) RunFlow(*FlowRequest, grpc.ServerStreamingServer[FlowEvent]) error {
+	return status.Errorf(codes.Unimplemented, "method RunFlow not implemented")
 }
 func (UnimplementedBrainServiceServer) mustEmbedUnimplementedBrainServiceServer() {}
 func (UnimplementedBrainServiceServer) testEmbeddedByValue()                      {}
@@ -186,6 +217,17 @@ func _BrainService_ChatStream_Handler(srv interface{}, stream grpc.ServerStream)
 // This type alias is provided for backwards compatibility with existing code that references the prior non-generic stream type by name.
 type BrainService_ChatStreamServer = grpc.ServerStreamingServer[ChatChunk]
 
+func _BrainService_RunFlow_Handler(srv interface{}, stream grpc.ServerStream) error {
+	m := new(FlowRequest)
+	if err := stream.RecvMsg(m); err != nil {
+		return err
+	}
+	return srv.(BrainServiceServer).RunFlow(m, &grpc.GenericServerStream[FlowRequest, FlowEvent]{ServerStream: stream})
+}
+
+// This type alias is provided for backwards compatibility with existing code that references the prior non-generic stream type by name.
+type BrainService_RunFlowServer = grpc.ServerStreamingServer[FlowEvent]
+
 // BrainService_ServiceDesc is the grpc.ServiceDesc for BrainService service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -206,6 +248,11 @@ var BrainService_ServiceDesc = grpc.ServiceDesc{
 		{
 			StreamName:    "ChatStream",
 			Handler:       _BrainService_ChatStream_Handler,
+			ServerStreams: true,
+		},
+		{
+			StreamName:    "RunFlow",
+			Handler:       _BrainService_RunFlow_Handler,
 			ServerStreams: true,
 		},
 	},

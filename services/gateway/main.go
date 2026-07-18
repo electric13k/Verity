@@ -49,6 +49,7 @@ func main() {
 	// Request-id on every request; the same id propagates to brain/core in
 	// gRPC metadata (x-verity-request-id) once the spine lands in M1.
 	app.Use(requestid.New())
+	app.Use(securityHeaders())
 
 	app.Get("/healthz", func(c fiber.Ctx) error {
 		missing := missingConfig()
@@ -76,6 +77,7 @@ func main() {
 	} else {
 		sp.registerRoutes(v1)
 		sp.registerChat(v1)
+		sp.registerFlows(v1)
 	}
 
 	addr := os.Getenv("GATEWAY_ADDR")

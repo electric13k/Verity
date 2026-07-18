@@ -17,6 +17,11 @@ service BrainService {
   // Chat streaming (M3). One request, server-streamed chunks; the gateway
   // fans out to the client as SSE.
   rpc ChatStream(ChatRequest) returns (stream ChatChunk);
+
+  // Flow execution (M5): conductor/workers/inspector roles over a task,
+  // streamed phase by phase. Blind Orchestration Protocol applies: events
+  // crossing this boundary carry task substance, never machinery.
+  rpc RunFlow(FlowRequest) returns (stream FlowEvent);
 }
 
 message HelloRequest {
@@ -52,4 +57,17 @@ message ChatUsage {
 message ChatConfidence {
   uint32 score = 1;  // 0-100, RRR protocol
   string rationale = 2;
+}
+
+message FlowRequest {
+  string task = 1;
+  string flow_kind = 2;  // "converge" | "diverge_converge"; empty = auto-pick
+  string model = 3;      // provider:model selector; empty = default
+  uint32 workers = 4;    // parallel workers; 0 = default (2), capped server-side
+}
+
+message FlowEvent {
+  string role = 1;     // conductor | worker-<n> | inspector | flow
+  string phase = 2;    // plan | work | verify | converge | done | error
+  string content = 3;  // sanitized (BOP) before leaving the brain
 }

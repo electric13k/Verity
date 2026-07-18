@@ -15,6 +15,7 @@ from verity.v1 import brain_pb2, brain_pb2_grpc, common_pb2, core_pb2, core_pb2_
 
 from app.config import settings
 from app.confidence import score_response
+from app.flows.engine import run_flow
 from app.memory.service import memory_service
 from app.providers import registry
 from app.providers.base import ChatMessage, Delta, ProviderError, Usage
@@ -133,6 +134,42 @@ class BrainServicer(brain_pb2_grpc.BrainServiceServicer):
                 tenant.user_id, request.user_message, full_response
             )
         )
+
+    async def RunFlow(self, request, context):
+        """Flow pipeline: tenant (fail closed) → conductor/workers/inspector
+        → converge, events streamed as phases complete."""
+        tenant = await require_tenant(context)
+        if not request.task.strip():
+            await context.abort(grpc.StatusCode.INVALID_ARGUMENT, "task is required")
+            return
+        try:
+            provider, model = registry.resolve(request.model)
+        except ProviderError as exc:
+            await context.abort(grpc.StatusCode.FAILED_PRECONDITION, str(exc))
+            return
+        log.info(
+            "flow start user=%s provider=%s kind=%s request_id=%s",
+            tenant.user_id, provider.name, request.flow_kind or "auto", tenant.request_id,
+        )
+        final = ""
+        try:
+            async for event in run_flow(
+                provider, model, request.task,
+                flow_kind=request.flow_kind, workers=request.workers,
+            ):
+                if event.phase == "converge":
+                    final = event.content
+                yield brain_pb2.FlowEvent(
+                    role=event.role, phase=event.phase, content=event.content
+                )
+        except ProviderError as exc:
+            await context.abort(grpc.StatusCode.UNAVAILABLE, str(exc))
+            return
+        if final:
+            # learning loop hears flow outcomes too (plan §0)
+            asyncio.get_running_loop().create_task(
+                memory_service.learn_from_exchange(tenant.user_id, request.task, final)
+            )
 
 
 async def serve(addr: str) -> grpc.aio.Server:

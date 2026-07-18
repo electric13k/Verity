@@ -52,6 +52,11 @@ class BrainServiceStub:
                 request_serializer=verity_dot_v1_dot_brain__pb2.ChatRequest.SerializeToString,
                 response_deserializer=verity_dot_v1_dot_brain__pb2.ChatChunk.FromString,
                 _registered_method=True)
+        self.RunFlow = channel.unary_stream(
+                '/verity.v1.BrainService/RunFlow',
+                request_serializer=verity_dot_v1_dot_brain__pb2.FlowRequest.SerializeToString,
+                response_deserializer=verity_dot_v1_dot_brain__pb2.FlowEvent.FromString,
+                _registered_method=True)
 
 
 class BrainServiceServicer:
@@ -80,6 +85,15 @@ class BrainServiceServicer:
         context.set_details('Method not implemented!')
         raise NotImplementedError('Method not implemented!')
 
+    def RunFlow(self, request, context):
+        """Flow execution (M5): conductor/workers/inspector roles over a task,
+        streamed phase by phase. Blind Orchestration Protocol applies: events
+        crossing this boundary carry task substance, never machinery.
+        """
+        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        context.set_details('Method not implemented!')
+        raise NotImplementedError('Method not implemented!')
+
 
 def add_BrainServiceServicer_to_server(servicer, server):
     rpc_method_handlers = {
@@ -97,6 +111,11 @@ def add_BrainServiceServicer_to_server(servicer, server):
                     servicer.ChatStream,
                     request_deserializer=verity_dot_v1_dot_brain__pb2.ChatRequest.FromString,
                     response_serializer=verity_dot_v1_dot_brain__pb2.ChatChunk.SerializeToString,
+            ),
+            'RunFlow': grpc.unary_stream_rpc_method_handler(
+                    servicer.RunFlow,
+                    request_deserializer=verity_dot_v1_dot_brain__pb2.FlowRequest.FromString,
+                    response_serializer=verity_dot_v1_dot_brain__pb2.FlowEvent.SerializeToString,
             ),
     }
     generic_handler = grpc.method_handlers_generic_handler(
@@ -182,6 +201,33 @@ class BrainService:
             '/verity.v1.BrainService/ChatStream',
             verity_dot_v1_dot_brain__pb2.ChatRequest.SerializeToString,
             verity_dot_v1_dot_brain__pb2.ChatChunk.FromString,
+            options,
+            channel_credentials,
+            insecure,
+            call_credentials,
+            compression,
+            wait_for_ready,
+            timeout,
+            metadata,
+            _registered_method=True)
+
+    @staticmethod
+    def RunFlow(request,
+            target,
+            options=(),
+            channel_credentials=None,
+            call_credentials=None,
+            insecure=False,
+            compression=None,
+            wait_for_ready=None,
+            timeout=None,
+            metadata=None):
+        return grpc.experimental.unary_stream(
+            request,
+            target,
+            '/verity.v1.BrainService/RunFlow',
+            verity_dot_v1_dot_brain__pb2.FlowRequest.SerializeToString,
+            verity_dot_v1_dot_brain__pb2.FlowEvent.FromString,
             options,
             channel_credentials,
             insecure,
