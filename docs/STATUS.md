@@ -10,8 +10,8 @@ Tracking against [`MASTER_PLAN.md`](MASTER_PLAN.md) §7.
 | M3 | AI pipeline | ✅ done | providers (anthropic/openai-compat/ollama/house/echo-dev), chat SSE E2E with memory recall + learning loop, refiner, confidence, wrapUntrusted, Qdrant search with mandatory tenant filter. cognee = primary once its container is up (fallback store verified); live provider calls await user keys |
 | M4 | UI assembly | ⬜ | design system, glass components, chat/flow/office UIs, branching, upload, PWA |
 | M5 | Platform | ✅ done (backend) | flow engine (conductor/workers/inspector, converge + diverge-converge, BOP-sanitized events) via /v1/flows SSE; offices with STATE.md checkpoints + per-user caps; SKILL.md/plugin.json loader + sandboxed script executor (path jail, env scrub, timeout); MCP HTTP client with per-call consent; gateway security headers. Frontend surfaces await M4 |
-| M6 | Hardening + deploy | ⬜ | Pages, VPC, WAF, mTLS, CSP, pen-test — **v1 retirement gate** |
-| M7 | Compute network | ⬜ | swarm port, node daemon, credits |
+| M6 | Hardening + deploy | ⏸ blocked on gates | gateway security headers + CSP already live (groundwork); Pages/VPC/WAF/mTLS need Cloudflare account + deploy targets (user gates) — **v1 retirement gate** |
+| M7 | Compute network | 🟡 partial | schema ported (nodes/jobs/work_units/assignments/credit ledger, migration 0002) + redundancy-2 consensus verify with sybil-pair guard in core, unit-tested. Pending: node daemon, /compute page (frontend), live 2-node E2E |
 | M8 | Apps | ⬜ | Tauri v2 desktop + mobile |
 | M9 | Marketing | ⬜ | sizzles, screens, brand kit, launch landing |
 
