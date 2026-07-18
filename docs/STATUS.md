@@ -22,6 +22,10 @@ Tracking against [`MASTER_PLAN.md`](MASTER_PLAN.md) §7.
 - §5 training-data legality decision (plan assumes the safe/open path)
 - Signing certs + store accounts (M8) · counsel review of legal pages
 
+## Decisions
+
+- **Memory stack (user, 2026-07-18):** cognee (self-hosted from github.com/topoteretes/cognee) is the primary brain engine; the durable fallback is an **Obsidian-compatible markdown vault** (`OBSIDIAN_VAULT_PATH`) — one note per memory with YAML frontmatter, browsable/editable directly in Obsidian. Postgres `memories` table remains as an optional index, not the fallback.
+
 ## Notes
 
 - Dev container Python is 3.11; plan targets 3.12 — `requires-python = ">=3.11"` for now, bump at Stage B deploy.

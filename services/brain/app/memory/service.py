@@ -1,7 +1,9 @@
-"""Memory ("Brains"). cognee is the PRIMARY engine (dataset-per-user
-isolation); the Postgres pgvector vault is the fallback (v1 had this
-inverted — plan §0). Until a cognee/postgres instance is configured the
-in-process store keeps the pipeline (and its tests) honest.
+"""Memory ("Brains"). cognee is the PRIMARY engine (self-hosted,
+github.com/topoteretes/cognee; dataset-per-user isolation). The durable
+FALLBACK is an Obsidian-compatible markdown vault (user decision
+2026-07-18) — set OBSIDIAN_VAULT_PATH and every remembered fact becomes a
+note you can open in Obsidian. Without either, an in-process store keeps
+the pipeline (and its tests) honest.
 
 Continuous learning: learn_from_exchange() runs after every chat/flow
 exchange — the tag funnel + importance threshold decide what sticks.
@@ -87,7 +89,12 @@ class CogneeStore:
 
 class MemoryService:
     def __init__(self) -> None:
-        self._fallback = InProcessStore()
+        if settings.obsidian_vault_path:
+            from app.memory.obsidian import ObsidianStore
+
+            self._fallback = ObsidianStore(settings.obsidian_vault_path)
+        else:
+            self._fallback = InProcessStore()
         self._cognee: CogneeStore | None = (
             CogneeStore(settings.cognee_url) if settings.cognee_url else None
         )

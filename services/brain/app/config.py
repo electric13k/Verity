@@ -16,6 +16,7 @@ class Settings(BaseSettings):
     redis_url: str | None = None          # queues, office jobs (M2)
     qdrant_url: str | None = None         # via core service (M3)
     cognee_url: str | None = None         # primary memory engine (M3)
+    obsidian_vault_path: str | None = None  # durable fallback brain store (markdown vault)
     core_grpc_addr: str | None = None     # Rust core (M1)
     ollama_cloud_api_key: str | None = None  # house models, env-gated (M3)
     encryption_key: str | None = None     # AES-256-GCM for user provider keys (M2)
