@@ -25,4 +25,4 @@ Tracking against [`MASTER_PLAN.md`](MASTER_PLAN.md) §7.
 ## Notes
 
 - Dev container Python is 3.11; plan targets 3.12 — `requires-python = ">=3.11"` for now, bump at Stage B deploy.
-- v1 prototype (`backend/`, `frontend/`, `SETUP.md`) is frozen in place until the M6 gate.
+- The v1 prototype is not part of this branch — it lives untouched on `main` until the M6 retirement gate. v2 code never copies from it.

@@ -16,8 +16,9 @@ cover.
 
 **Read first.** Before writing code: `docs/MASTER_PLAN.md` (architecture,
 security layers, laws), `docs/STATUS.md` (what's done), and the code you're
-about to touch. v1 (`backend/`, `frontend/`, `SETUP.md`) is frozen — never
-modify it.
+about to touch. v2 is a fresh build: never copy code from the v1 prototype
+(it lives only on the `main` branch) — concepts carry over as design law,
+code does not.
 
 **Laws (violating any of these fails the run):**
 1. Boot degrades, never dies. No required env vars at startup; `/healthz`

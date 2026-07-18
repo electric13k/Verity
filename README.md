@@ -21,9 +21,9 @@ infra/
 docs/
   MASTER_PLAN.md   the v2 master plan (architecture, security, roadmap)
   STATUS.md        live milestone status
-
-backend/ frontend/ SETUP.md    ← v1 prototype, frozen. Do not modify (retirement gate: M6).
 ```
+
+v2 is a fresh build — concepts from v1 survive as design law (see the plan), code does not. The v1 prototype lives only on the `main` branch and stays untouched until the M6 retirement gate.
 
 ## Quickstart (Stage A — one box)
 
