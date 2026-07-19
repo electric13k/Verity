@@ -1,9 +1,15 @@
 @import "tailwindcss";
 
 /* Design tokens are generated from packages/tokens (Gallery Matcha).
-   Both themes ship from day one; dark and light are equal citizens. */
+   Both themes ship from day one; dark and light are equal citizens.
+   Regenerate with: node packages/tokens/build.mjs */
 @import "../../../packages/tokens/dist/tokens.css";
 
+/* ------------------------------------------------------------------ *
+ * Tailwind theme — palette + scale wired from the generated CSS vars.
+ * These names ('bg-porcelain', 'text-ink', 'p-4' on the token scale…)
+ * are the only way color/space enters a component. No raw hex in JSX.
+ * ------------------------------------------------------------------ */
 @theme inline {
   --color-porcelain: var(--v-porcelain);
   --color-bone: var(--v-bone);
@@ -13,10 +19,399 @@
   --color-brass: var(--v-brass);
   --color-oxblood: var(--v-oxblood);
   --color-fog: var(--v-fog);
+
+  --font-display: var(--v-font-display);
+  --font-sans: var(--v-font-body);
+  --font-mono: var(--v-font-mono);
+
+  --radius-sm: var(--v-radius-sm);
+  --radius-md: var(--v-radius-md);
+  --radius-lg: var(--v-radius-lg);
+  --radius-glass: var(--v-radius-glass);
+
+  /* Space scale = 4 / 8 / 12 / 18 / 28 / 44 (design rule 1). */
+  --spacing-1: var(--v-space-1);
+  --spacing-2: var(--v-space-2);
+  --spacing-3: var(--v-space-3);
+  --spacing-4: var(--v-space-4);
+  --spacing-5: var(--v-space-5);
+  --spacing-6: var(--v-space-6);
+
+  --ease-glass: var(--v-motion-ease);
+}
+
+/* ------------------------------------------------------------------ *
+ * Self-hosted faces (npm, not CDN — CSP font-src 'self').
+ *   display : Fraunces Variable (optical sizing)  → editorial serif
+ *   body/UI : Geist  (next/font, --font-geist-sans)
+ *   data    : Geist Mono (--font-geist-mono)
+ * The token file carries bare family names as identity; here we bind
+ * them to the actual loaded faces with real fallback stacks.
+ * ------------------------------------------------------------------ */
+:root {
+  --v-font-display: "Fraunces Variable", "Fraunces", Georgia, serif;
+  --v-font-body: var(--font-geist-sans), ui-sans-serif, system-ui, sans-serif;
+  --v-font-mono: var(--font-geist-mono), ui-monospace, "SF Mono", monospace;
+
+  /* Derived, theme-aware surface + edge tints for glass. Defined per theme
+     below; these are the light-mode values. */
+  --glass-tint: 255 253 248;      /* bone, warm white */
+  --glass-fill: 0.62;             /* alpha of the tinted fill */
+  --glass-fill-raised: 0.78;
+  --glass-edge-hi: 255 255 255;   /* refracted highlight edge */
+  --glass-edge-lo: 40 34 20;      /* refracted shadow edge (brass-ward) */
+  --glass-edge-hi-a: 0.65;
+  --glass-edge-lo-a: 0.06;
+  --glass-blur: 18px;
+  --glass-sat: 1.5;
+  --hairline: 140 115 73;         /* brass */
+  --focus-ring: 86 105 75;        /* matcha */
+  --shadow-cast: 28 30 26;
+
+  /* Confidence bands — warm, never a traffic light. */
+  --conf-high: var(--v-matcha);
+  --conf-mid: var(--v-chai);
+  --conf-low: var(--v-brass);
+}
+
+:root[data-theme="dark"] {
+  --glass-tint: 24 27 23;         /* bone (dark) */
+  --glass-fill: 0.5;
+  --glass-fill-raised: 0.66;
+  --glass-edge-hi: 220 228 210;
+  --glass-edge-lo: 0 0 0;
+  --glass-edge-hi-a: 0.14;
+  --glass-edge-lo-a: 0.4;
+  --glass-blur: 22px;
+  --glass-sat: 1.35;
+  --hairline: 201 174 124;        /* brass (dark) */
+  --focus-ring: 168 196 142;
+  --shadow-cast: 0 0 0;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --glass-tint: 24 27 23;
+    --glass-fill: 0.5;
+    --glass-fill-raised: 0.66;
+    --glass-edge-hi: 220 228 210;
+    --glass-edge-lo: 0 0 0;
+    --glass-edge-hi-a: 0.14;
+    --glass-edge-lo-a: 0.4;
+    --glass-blur: 22px;
+    --glass-sat: 1.35;
+    --hairline: 201 174 124;
+    --focus-ring: 168 196 142;
+    --shadow-cast: 0 0 0;
+  }
+}
+
+/* ------------------------------------------------------------------ *
+ * Base
+ * ------------------------------------------------------------------ */
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  height: 100%;
 }
 
 body {
+  margin: 0;
   background: var(--v-porcelain);
   color: var(--v-ink);
-  font-family: var(--v-font-body), system-ui, sans-serif;
+  font-family: var(--v-font-body);
+  font-feature-settings: "cv01", "ss01";
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+  overflow: hidden; /* app owns its own scroll regions */
+}
+
+::selection {
+  background: color-mix(in oklab, var(--v-matcha) 32%, transparent);
+}
+
+.font-display {
+  font-family: var(--v-font-display);
+  font-optical-sizing: auto;
+  font-weight: 460;
+  letter-spacing: -0.012em;
+}
+
+/* Eyebrow: mono, tracked, structural label — encodes section, not decoration. */
+.eyebrow {
+  font-family: var(--v-font-mono);
+  font-size: 0.6875rem;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: color-mix(in oklab, var(--v-ink) 52%, transparent);
+}
+
+/* ------------------------------------------------------------------ *
+ * Glass — refraction material, implemented ONCE. Components consume
+ * these classes; nothing restyles glass ad hoc (plan §4).
+ * ------------------------------------------------------------------ */
+@layer components {
+  .glass {
+    position: relative;
+    background: rgb(var(--glass-tint) / var(--glass-fill));
+    backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-sat));
+    -webkit-backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-sat));
+    border: 1px solid rgb(var(--glass-edge-hi) / calc(var(--glass-edge-hi-a) * 0.5));
+    border-radius: var(--v-radius-glass);
+    /* Refraction: bright top-left inset + shadow bottom inset + soft cast.
+       The two insets read as the light bending across the pane's edge. */
+    box-shadow:
+      inset 0 1px 0 0 rgb(var(--glass-edge-hi) / var(--glass-edge-hi-a)),
+      inset 0 -1px 0 0 rgb(var(--glass-edge-lo) / var(--glass-edge-lo-a)),
+      inset 1px 0 0 0 rgb(var(--glass-edge-hi) / calc(var(--glass-edge-hi-a) * 0.4)),
+      0 1px 1px rgb(var(--shadow-cast) / 0.04),
+      0 8px 24px -12px rgb(var(--shadow-cast) / 0.28);
+  }
+
+  /* Prism fringe: a faint chromatic edge on top — matcha→chai→brass.
+     Kept low so it reads as light dispersion, not a colored border. */
+  .glass::before {
+    content: "";
+    position: absolute;
+    inset: 0;
+    border-radius: inherit;
+    padding: 1px;
+    background: linear-gradient(
+      135deg,
+      color-mix(in oklab, var(--v-matcha) 55%, transparent),
+      transparent 30%,
+      transparent 70%,
+      color-mix(in oklab, var(--v-chai) 50%, transparent)
+    );
+    -webkit-mask:
+      linear-gradient(#000 0 0) content-box,
+      linear-gradient(#000 0 0);
+    -webkit-mask-composite: xor;
+    mask-composite: exclude;
+    opacity: 0.5;
+    pointer-events: none;
+  }
+
+  .glass-raised {
+    background: rgb(var(--glass-tint) / var(--glass-fill-raised));
+  }
+
+  /* Active glass: brass hairline (plan §4 — brass edge on active glass). */
+  .glass-active {
+    border-color: rgb(var(--hairline) / 0.55);
+    box-shadow:
+      inset 0 1px 0 0 rgb(var(--glass-edge-hi) / var(--glass-edge-hi-a)),
+      inset 0 0 0 1px rgb(var(--hairline) / 0.28),
+      0 8px 28px -12px rgb(var(--shadow-cast) / 0.32);
+  }
+
+  /* Glow — hierarchy signal ONLY, one per view (plan §4, design rule 4). */
+  .glow-focus {
+    box-shadow:
+      inset 0 1px 0 0 rgb(var(--glass-edge-hi) / var(--glass-edge-hi-a)),
+      0 0 0 1px rgb(var(--hairline) / 0.3),
+      0 0 44px -6px color-mix(in oklab, var(--v-matcha) 60%, transparent),
+      0 10px 30px -14px rgb(var(--shadow-cast) / 0.4);
+  }
+
+  .hairline {
+    background: linear-gradient(
+      90deg,
+      transparent,
+      rgb(var(--hairline) / 0.4) 12%,
+      rgb(var(--hairline) / 0.4) 88%,
+      transparent
+    );
+    height: 1px;
+    border: 0;
+  }
+
+  /* Focus visibility — quality floor, both themes. */
+  :where(a, button, input, textarea, [tabindex]):focus-visible {
+    outline: 2px solid rgb(var(--focus-ring) / 0.9);
+    outline-offset: 2px;
+    border-radius: var(--v-radius-sm);
+  }
+}
+
+/* Custom scrollbars — thin, warm, unobtrusive. */
+.scroll-quiet {
+  scrollbar-width: thin;
+  scrollbar-color: rgb(var(--hairline) / 0.3) transparent;
+}
+.scroll-quiet::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+.scroll-quiet::-webkit-scrollbar-thumb {
+  background: color-mix(in oklab, var(--v-brass) 32%, transparent);
+  border-radius: 999px;
+  border: 3px solid transparent;
+  background-clip: content-box;
+}
+.scroll-quiet::-webkit-scrollbar-thumb:hover {
+  background: color-mix(in oklab, var(--v-brass) 50%, transparent);
+  background-clip: content-box;
+}
+
+/* ------------------------------------------------------------------ *
+ * Markdown (assistant messages). Sanitized post-parse with DOMPurify.
+ * ------------------------------------------------------------------ */
+.prose-verity {
+  line-height: 1.68;
+  font-size: 0.9375rem;
+}
+.prose-verity > :first-child { margin-top: 0; }
+.prose-verity > :last-child { margin-bottom: 0; }
+.prose-verity p { margin: 0.7em 0; }
+.prose-verity h1, .prose-verity h2, .prose-verity h3 {
+  font-family: var(--v-font-display);
+  font-optical-sizing: auto;
+  letter-spacing: -0.01em;
+  margin: 1.1em 0 0.5em;
+  line-height: 1.2;
+}
+.prose-verity h1 { font-size: 1.4rem; }
+.prose-verity h2 { font-size: 1.2rem; }
+.prose-verity h3 { font-size: 1.05rem; }
+.prose-verity a {
+  color: var(--v-matcha);
+  text-underline-offset: 2px;
+  text-decoration-color: color-mix(in oklab, var(--v-matcha) 45%, transparent);
+}
+.prose-verity ul, .prose-verity ol { margin: 0.6em 0; padding-left: 1.4em; }
+.prose-verity li { margin: 0.25em 0; }
+.prose-verity li::marker { color: var(--v-brass); }
+.prose-verity blockquote {
+  margin: 0.8em 0;
+  padding-left: 1em;
+  border-left: 2px solid rgb(var(--hairline) / 0.5);
+  color: color-mix(in oklab, var(--v-ink) 78%, transparent);
+  font-style: italic;
+}
+.prose-verity code {
+  font-family: var(--v-font-mono);
+  font-size: 0.85em;
+  background: color-mix(in oklab, var(--v-fog) 55%, transparent);
+  padding: 0.12em 0.38em;
+  border-radius: var(--v-radius-sm);
+}
+.prose-verity pre {
+  font-family: var(--v-font-mono);
+  font-size: 0.82rem;
+  line-height: 1.55;
+  background: color-mix(in oklab, var(--v-ink) 6%, var(--v-bone));
+  border: 1px solid rgb(var(--hairline) / 0.22);
+  border-radius: var(--v-radius-md);
+  padding: 0.9em 1em;
+  overflow-x: auto;
+  margin: 0.8em 0;
+}
+:root[data-theme="dark"] .prose-verity pre {
+  background: color-mix(in oklab, #000 40%, var(--v-porcelain));
+}
+.prose-verity pre code { background: none; padding: 0; font-size: 0.82rem; }
+.prose-verity table { border-collapse: collapse; margin: 0.8em 0; font-size: 0.88em; }
+.prose-verity th, .prose-verity td {
+  border: 1px solid rgb(var(--hairline) / 0.25);
+  padding: 0.4em 0.7em;
+  text-align: left;
+}
+.prose-verity th { font-family: var(--v-font-mono); font-size: 0.78em; text-transform: uppercase; letter-spacing: 0.06em; }
+.prose-verity hr { border: 0; height: 1px; background: rgb(var(--hairline) / 0.3); margin: 1.2em 0; }
+
+/* ------------------------------------------------------------------ *
+ * Motion — every keyframe maps to a state change; ambient ground is the
+ * one permitted idle loop, and it is disabled under reduced-motion.
+ * ------------------------------------------------------------------ */
+@keyframes v-blob-drift {
+  0%,
+  100% { transform: translate3d(0, 0, 0) scale(1); }
+  50% { transform: translate3d(var(--dx, 4%), var(--dy, -3%), 0) scale(1.08); }
+}
+@keyframes v-rise {
+  from { opacity: 0; transform: translateY(6px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+@keyframes v-caret {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.25; }
+}
+.v-rise { animation: v-rise var(--v-motion-base) var(--v-motion-ease) both; }
+
+.stream-caret::after {
+  content: "";
+  display: inline-block;
+  width: 0.5ch;
+  height: 1.05em;
+  margin-left: 1px;
+  vertical-align: -0.15em;
+  background: var(--v-matcha);
+  border-radius: 1px;
+  animation: v-caret 1s steps(2, jump-none) infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.001ms !important;
+    scroll-behavior: auto !important;
+  }
+  .stream-caret::after { animation: none; opacity: 0.6; }
+  .mesh__blob { animation: none !important; }
+}
+
+/* ------------------------------------------------------------------ *
+ * Ambient gradient-mesh ground (plan §4: refraction glass needs a
+ * chromatic backdrop; flat backgrounds make liquid glass invisible).
+ * Both themes ship a ground from day one. The drift is the single
+ * permitted idle loop — GPU-cheap transforms, off under reduced motion.
+ * ------------------------------------------------------------------ */
+.mesh {
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  overflow: hidden;
+  background: var(--v-porcelain);
+  pointer-events: none;
+}
+.mesh__blob {
+  position: absolute;
+  border-radius: 50%;
+  filter: blur(70px);
+  opacity: 0.55;
+  will-change: transform;
+  animation: v-blob-drift 34s var(--v-motion-ease) infinite;
+}
+:root[data-theme="dark"] .mesh__blob { opacity: 0.42; filter: blur(84px); }
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) .mesh__blob { opacity: 0.42; filter: blur(84px); }
+}
+/* Paper grain — the atelier texture that keeps the ground from reading flat. */
+.mesh__grain {
+  position: absolute;
+  inset: -50%;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='2' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+  opacity: 0.035;
+  mix-blend-mode: soft-light;
+}
+:root[data-theme="dark"] .mesh__grain { opacity: 0.06; mix-blend-mode: overlay; }
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) .mesh__grain { opacity: 0.06; mix-blend-mode: overlay; }
+}
+/* Vignette to settle the edges into the canvas. */
+.mesh__vignette {
+  position: absolute;
+  inset: 0;
+  background: radial-gradient(
+    120% 120% at 50% 40%,
+    transparent 55%,
+    color-mix(in oklab, var(--v-porcelain) 70%, transparent) 100%
+  );
 }
