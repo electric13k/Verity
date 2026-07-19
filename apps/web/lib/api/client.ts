@@ -100,4 +100,25 @@ export const api = {
   deleteConversation: mock.deleteConversation,
   saveMessages: mock.saveMessages,
   branch: mock.branch,
+  // offices
+  listOffices: mock.listOffices,
+  createOffice: mock.createOffice,
+  deleteOffice: mock.deleteOffice,
+  runOffice: mock.runOffice,
+  getOfficeRun: mock.getOfficeRun,
+  // provider keys
+  getProviderKeys: mock.getProviderKeys,
+  putProviderKey: mock.putProviderKey,
+  deleteProviderKey: mock.deleteProviderKey,
+  // upload
+  upload: mock.upload,
+  // transcripts
+  getTranscript: mock.getTranscript,
+  transcriptShareIds: mock.transcriptShareIds,
+  // compute
+  computeStats: mock.computeStats,
 };
+
+// Live routes exported at the top level (SSE / request-response, no mock).
+export { flowStream } from "./flows";
+export { submitComputeJob } from "./compute";

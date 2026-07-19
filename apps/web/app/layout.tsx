@@ -6,12 +6,21 @@ import "./globals.css";
 
 import { ThemeProvider } from "@/components/shell/ThemeProvider";
 import { AmbientMesh } from "@/components/background/AmbientMesh";
-import { AppShell } from "@/components/shell/AppShell";
-import { AppProviders } from "@/lib/store";
+import { PWARegister } from "@/components/shell/PWARegister";
 
 export const metadata: Metadata = {
   title: "Verity",
   description: "Calm, precise, trustworthy AI orchestration.",
+  applicationName: "Verity",
+  manifest: "/manifest.webmanifest",
+  appleWebApp: { capable: true, title: "Verity", statusBarStyle: "default" },
+  icons: {
+    icon: [
+      { url: "/icons/icon.svg", type: "image/svg+xml" },
+      { url: "/icons/icon-192.png", sizes: "192x192", type: "image/png" },
+    ],
+    apple: [{ url: "/icons/apple-touch-icon.png", sizes: "180x180" }],
+  },
 };
 
 export const viewport: Viewport = {
@@ -39,9 +48,8 @@ export default function RootLayout({
       <body>
         <ThemeProvider>
           <AmbientMesh />
-          <AppProviders>
-            <AppShell>{children}</AppShell>
-          </AppProviders>
+          {children}
+          <PWARegister />
         </ThemeProvider>
       </body>
     </html>
