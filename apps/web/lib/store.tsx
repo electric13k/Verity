@@ -112,14 +112,18 @@ export function AppProviders({ children }: { children: React.ReactNode }) {
         ctrl.signal,
       );
 
+      // `pendingConf` is only ever assigned inside the stream callback above;
+      // TS can't see that across the closure, so read it through a typed local
+      // (otherwise it narrows to `never` here).
+      const conf = pendingConf as { score: number; rationale?: string } | null;
       patchMessage(asstId, {
         streaming: false,
-        ...(pendingConf
+        ...(conf
           ? {
               confidence: {
-                score: pendingConf.score,
-                band: bandForScore(pendingConf.score),
-                rationale: pendingConf.rationale,
+                score: conf.score,
+                band: bandForScore(conf.score),
+                rationale: conf.rationale,
               },
             }
           : {}),
