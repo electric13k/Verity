@@ -52,6 +52,16 @@ class BrainServiceStub:
                 request_serializer=verity_dot_v1_dot_brain__pb2.ChatRequest.SerializeToString,
                 response_deserializer=verity_dot_v1_dot_brain__pb2.ChatChunk.FromString,
                 _registered_method=True)
+        self.RegenerateMessage = channel.unary_stream(
+                '/verity.v1.BrainService/RegenerateMessage',
+                request_serializer=verity_dot_v1_dot_brain__pb2.RegenerateRequest.SerializeToString,
+                response_deserializer=verity_dot_v1_dot_brain__pb2.ChatChunk.FromString,
+                _registered_method=True)
+        self.EditMessage = channel.unary_stream(
+                '/verity.v1.BrainService/EditMessage',
+                request_serializer=verity_dot_v1_dot_brain__pb2.EditMessageRequest.SerializeToString,
+                response_deserializer=verity_dot_v1_dot_brain__pb2.ChatChunk.FromString,
+                _registered_method=True)
         self.RunFlow = channel.unary_stream(
                 '/verity.v1.BrainService/RunFlow',
                 request_serializer=verity_dot_v1_dot_brain__pb2.FlowRequest.SerializeToString,
@@ -79,7 +89,25 @@ class BrainServiceServicer:
 
     def ChatStream(self, request, context):
         """Chat streaming (M3). One request, server-streamed chunks; the gateway
-        fans out to the client as SSE.
+        fans out to the client as SSE. The first chunk is a ChatMeta carrying the
+        (possibly new) conversation id, the assistant message id, and an
+        auto-generated title for brand-new conversations.
+        """
+        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        context.set_details('Method not implemented!')
+        raise NotImplementedError('Method not implemented!')
+
+    def RegenerateMessage(self, request, context):
+        """Regenerate an assistant message: drops the old assistant turn and streams
+        a fresh one against the same preceding user message + history.
+        """
+        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        context.set_details('Method not implemented!')
+        raise NotImplementedError('Method not implemented!')
+
+    def EditMessage(self, request, context):
+        """Edit a user message: rewrites its content, truncates every later message
+        in the conversation, then streams a fresh assistant reply.
         """
         context.set_code(grpc.StatusCode.UNIMPLEMENTED)
         context.set_details('Method not implemented!')
@@ -110,6 +138,16 @@ def add_BrainServiceServicer_to_server(servicer, server):
             'ChatStream': grpc.unary_stream_rpc_method_handler(
                     servicer.ChatStream,
                     request_deserializer=verity_dot_v1_dot_brain__pb2.ChatRequest.FromString,
+                    response_serializer=verity_dot_v1_dot_brain__pb2.ChatChunk.SerializeToString,
+            ),
+            'RegenerateMessage': grpc.unary_stream_rpc_method_handler(
+                    servicer.RegenerateMessage,
+                    request_deserializer=verity_dot_v1_dot_brain__pb2.RegenerateRequest.FromString,
+                    response_serializer=verity_dot_v1_dot_brain__pb2.ChatChunk.SerializeToString,
+            ),
+            'EditMessage': grpc.unary_stream_rpc_method_handler(
+                    servicer.EditMessage,
+                    request_deserializer=verity_dot_v1_dot_brain__pb2.EditMessageRequest.FromString,
                     response_serializer=verity_dot_v1_dot_brain__pb2.ChatChunk.SerializeToString,
             ),
             'RunFlow': grpc.unary_stream_rpc_method_handler(
@@ -200,6 +238,60 @@ class BrainService:
             target,
             '/verity.v1.BrainService/ChatStream',
             verity_dot_v1_dot_brain__pb2.ChatRequest.SerializeToString,
+            verity_dot_v1_dot_brain__pb2.ChatChunk.FromString,
+            options,
+            channel_credentials,
+            insecure,
+            call_credentials,
+            compression,
+            wait_for_ready,
+            timeout,
+            metadata,
+            _registered_method=True)
+
+    @staticmethod
+    def RegenerateMessage(request,
+            target,
+            options=(),
+            channel_credentials=None,
+            call_credentials=None,
+            insecure=False,
+            compression=None,
+            wait_for_ready=None,
+            timeout=None,
+            metadata=None):
+        return grpc.experimental.unary_stream(
+            request,
+            target,
+            '/verity.v1.BrainService/RegenerateMessage',
+            verity_dot_v1_dot_brain__pb2.RegenerateRequest.SerializeToString,
+            verity_dot_v1_dot_brain__pb2.ChatChunk.FromString,
+            options,
+            channel_credentials,
+            insecure,
+            call_credentials,
+            compression,
+            wait_for_ready,
+            timeout,
+            metadata,
+            _registered_method=True)
+
+    @staticmethod
+    def EditMessage(request,
+            target,
+            options=(),
+            channel_credentials=None,
+            call_credentials=None,
+            insecure=False,
+            compression=None,
+            wait_for_ready=None,
+            timeout=None,
+            metadata=None):
+        return grpc.experimental.unary_stream(
+            request,
+            target,
+            '/verity.v1.BrainService/EditMessage',
+            verity_dot_v1_dot_brain__pb2.EditMessageRequest.SerializeToString,
             verity_dot_v1_dot_brain__pb2.ChatChunk.FromString,
             options,
             channel_credentials,

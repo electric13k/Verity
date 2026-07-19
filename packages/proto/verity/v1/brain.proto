@@ -15,8 +15,18 @@ service BrainService {
   rpc Hello(HelloRequest) returns (HelloResponse);
 
   // Chat streaming (M3). One request, server-streamed chunks; the gateway
-  // fans out to the client as SSE.
+  // fans out to the client as SSE. The first chunk is a ChatMeta carrying the
+  // (possibly new) conversation id, the assistant message id, and an
+  // auto-generated title for brand-new conversations.
   rpc ChatStream(ChatRequest) returns (stream ChatChunk);
+
+  // Regenerate an assistant message: drops the old assistant turn and streams
+  // a fresh one against the same preceding user message + history.
+  rpc RegenerateMessage(RegenerateRequest) returns (stream ChatChunk);
+
+  // Edit a user message: rewrites its content, truncates every later message
+  // in the conversation, then streams a fresh assistant reply.
+  rpc EditMessage(EditMessageRequest) returns (stream ChatChunk);
 
   // Flow execution (M5): conductor/workers/inspector roles over a task,
   // streamed phase by phase. Blind Orchestration Protocol applies: events
@@ -39,6 +49,20 @@ message ChatRequest {
   string user_message = 2;
   string model = 3;          // provider:model selector; empty = default
   bool use_memory = 4;       // consult brains (cognee) before answering
+  repeated string file_ids = 5;  // uploaded files to fold into context (P6)
+}
+
+message RegenerateRequest {
+  string message_id = 1;     // the assistant message to regenerate
+  string model = 2;
+  bool use_memory = 3;
+}
+
+message EditMessageRequest {
+  string message_id = 1;     // the user message to edit
+  string content = 2;        // new content; truncates every later message
+  string model = 3;
+  bool use_memory = 4;
 }
 
 message ChatChunk {
@@ -46,7 +70,15 @@ message ChatChunk {
     string delta = 1;            // text delta
     ChatUsage usage = 2;         // terminal chunk
     ChatConfidence confidence = 3;
+    ChatMeta meta = 4;           // FIRST chunk: conversation id + message id + title
   }
+}
+
+// Emitted first so a new conversation surfaces its id/auto-name to the client.
+message ChatMeta {
+  string conversation_id = 1;
+  string message_id = 2;   // the assistant message id being streamed
+  string title = 3;        // set when a title was (auto-)generated this turn
 }
 
 message ChatUsage {

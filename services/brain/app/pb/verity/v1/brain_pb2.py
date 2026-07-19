@@ -25,7 +25,7 @@ _sym_db = _symbol_database.Default()
 from verity.v1 import common_pb2 as verity_dot_v1_dot_common__pb2
 
 
-DESCRIPTOR = _descriptor_pool.Default().AddSerializedFile(b'\n\x15verity/v1/brain.proto\x12\tverity.v1\x1a\x16verity/v1/common.proto\"\x1f\n\x0cHelloRequest\x12\x0f\n\x07message\x18\x01 \x01(\t\"3\n\rHelloResponse\x12\x0f\n\x07message\x18\x01 \x01(\t\x12\x11\n\tcore_echo\x18\x02 \x01(\t\"_\n\x0b\x43hatRequest\x12\x17\n\x0f\x63onversation_id\x18\x01 \x01(\t\x12\x14\n\x0cuser_message\x18\x02 \x01(\t\x12\r\n\x05model\x18\x03 \x01(\t\x12\x12\n\nuse_memory\x18\x04 \x01(\x08\"\x7f\n\tChatChunk\x12\x0f\n\x05\x64\x65lta\x18\x01 \x01(\tH\x00\x12%\n\x05usage\x18\x02 \x01(\x0b\x32\x14.verity.v1.ChatUsageH\x00\x12/\n\nconfidence\x18\x03 \x01(\x0b\x32\x19.verity.v1.ChatConfidenceH\x00\x42\t\n\x07payload\"8\n\tChatUsage\x12\x14\n\x0cinput_tokens\x18\x01 \x01(\r\x12\x15\n\routput_tokens\x18\x02 \x01(\r\"2\n\x0e\x43hatConfidence\x12\r\n\x05score\x18\x01 \x01(\r\x12\x11\n\trationale\x18\x02 \x01(\t\"N\n\x0b\x46lowRequest\x12\x0c\n\x04task\x18\x01 \x01(\t\x12\x11\n\tflow_kind\x18\x02 \x01(\t\x12\r\n\x05model\x18\x03 \x01(\t\x12\x0f\n\x07workers\x18\x04 \x01(\r\"9\n\tFlowEvent\x12\x0c\n\x04role\x18\x01 \x01(\t\x12\r\n\x05phase\x18\x02 \x01(\t\x12\x0f\n\x07\x63ontent\x18\x03 \x01(\t2\x82\x02\n\x0c\x42rainService\x12=\n\x06Health\x12\x18.verity.v1.HealthRequest\x1a\x19.verity.v1.HealthResponse\x12:\n\x05Hello\x12\x17.verity.v1.HelloRequest\x1a\x18.verity.v1.HelloResponse\x12<\n\nChatStream\x12\x16.verity.v1.ChatRequest\x1a\x14.verity.v1.ChatChunk0\x01\x12\x39\n\x07RunFlow\x12\x16.verity.v1.FlowRequest\x1a\x14.verity.v1.FlowEvent0\x01\x42HZFgithub.com/electric13k/verity/packages/proto/gen/go/verity/v1;verityv1b\x06proto3')
+DESCRIPTOR = _descriptor_pool.Default().AddSerializedFile(b'\n\x15verity/v1/brain.proto\x12\tverity.v1\x1a\x16verity/v1/common.proto\"\x1f\n\x0cHelloRequest\x12\x0f\n\x07message\x18\x01 \x01(\t\"3\n\rHelloResponse\x12\x0f\n\x07message\x18\x01 \x01(\t\x12\x11\n\tcore_echo\x18\x02 \x01(\t\"q\n\x0b\x43hatRequest\x12\x17\n\x0f\x63onversation_id\x18\x01 \x01(\t\x12\x14\n\x0cuser_message\x18\x02 \x01(\t\x12\r\n\x05model\x18\x03 \x01(\t\x12\x12\n\nuse_memory\x18\x04 \x01(\x08\x12\x10\n\x08\x66ile_ids\x18\x05 \x03(\t\"J\n\x11RegenerateRequest\x12\x12\n\nmessage_id\x18\x01 \x01(\t\x12\r\n\x05model\x18\x02 \x01(\t\x12\x12\n\nuse_memory\x18\x03 \x01(\x08\"\\\n\x12\x45\x64itMessageRequest\x12\x12\n\nmessage_id\x18\x01 \x01(\t\x12\x0f\n\x07\x63ontent\x18\x02 \x01(\t\x12\r\n\x05model\x18\x03 \x01(\t\x12\x12\n\nuse_memory\x18\x04 \x01(\x08\"\xa4\x01\n\tChatChunk\x12\x0f\n\x05\x64\x65lta\x18\x01 \x01(\tH\x00\x12%\n\x05usage\x18\x02 \x01(\x0b\x32\x14.verity.v1.ChatUsageH\x00\x12/\n\nconfidence\x18\x03 \x01(\x0b\x32\x19.verity.v1.ChatConfidenceH\x00\x12#\n\x04meta\x18\x04 \x01(\x0b\x32\x13.verity.v1.ChatMetaH\x00\x42\t\n\x07payload\"F\n\x08\x43hatMeta\x12\x17\n\x0f\x63onversation_id\x18\x01 \x01(\t\x12\x12\n\nmessage_id\x18\x02 \x01(\t\x12\r\n\x05title\x18\x03 \x01(\t\"8\n\tChatUsage\x12\x14\n\x0cinput_tokens\x18\x01 \x01(\r\x12\x15\n\routput_tokens\x18\x02 \x01(\r\"2\n\x0e\x43hatConfidence\x12\r\n\x05score\x18\x01 \x01(\r\x12\x11\n\trationale\x18\x02 \x01(\t\"N\n\x0b\x46lowRequest\x12\x0c\n\x04task\x18\x01 \x01(\t\x12\x11\n\tflow_kind\x18\x02 \x01(\t\x12\r\n\x05model\x18\x03 \x01(\t\x12\x0f\n\x07workers\x18\x04 \x01(\r\"9\n\tFlowEvent\x12\x0c\n\x04role\x18\x01 \x01(\t\x12\r\n\x05phase\x18\x02 \x01(\t\x12\x0f\n\x07\x63ontent\x18\x03 \x01(\t2\x93\x03\n\x0c\x42rainService\x12=\n\x06Health\x12\x18.verity.v1.HealthRequest\x1a\x19.verity.v1.HealthResponse\x12:\n\x05Hello\x12\x17.verity.v1.HelloRequest\x1a\x18.verity.v1.HelloResponse\x12<\n\nChatStream\x12\x16.verity.v1.ChatRequest\x1a\x14.verity.v1.ChatChunk0\x01\x12I\n\x11RegenerateMessage\x12\x1c.verity.v1.RegenerateRequest\x1a\x14.verity.v1.ChatChunk0\x01\x12\x44\n\x0b\x45\x64itMessage\x12\x1d.verity.v1.EditMessageRequest\x1a\x14.verity.v1.ChatChunk0\x01\x12\x39\n\x07RunFlow\x12\x16.verity.v1.FlowRequest\x1a\x14.verity.v1.FlowEvent0\x01\x42HZFgithub.com/electric13k/verity/packages/proto/gen/go/verity/v1;verityv1b\x06proto3')
 
 _globals = globals()
 _builder.BuildMessageAndEnumDescriptors(DESCRIPTOR, _globals)
@@ -38,17 +38,23 @@ if not _descriptor._USE_C_DESCRIPTORS:
   _globals['_HELLORESPONSE']._serialized_start=93
   _globals['_HELLORESPONSE']._serialized_end=144
   _globals['_CHATREQUEST']._serialized_start=146
-  _globals['_CHATREQUEST']._serialized_end=241
-  _globals['_CHATCHUNK']._serialized_start=243
-  _globals['_CHATCHUNK']._serialized_end=370
-  _globals['_CHATUSAGE']._serialized_start=372
-  _globals['_CHATUSAGE']._serialized_end=428
-  _globals['_CHATCONFIDENCE']._serialized_start=430
-  _globals['_CHATCONFIDENCE']._serialized_end=480
-  _globals['_FLOWREQUEST']._serialized_start=482
-  _globals['_FLOWREQUEST']._serialized_end=560
-  _globals['_FLOWEVENT']._serialized_start=562
-  _globals['_FLOWEVENT']._serialized_end=619
-  _globals['_BRAINSERVICE']._serialized_start=622
-  _globals['_BRAINSERVICE']._serialized_end=880
+  _globals['_CHATREQUEST']._serialized_end=259
+  _globals['_REGENERATEREQUEST']._serialized_start=261
+  _globals['_REGENERATEREQUEST']._serialized_end=335
+  _globals['_EDITMESSAGEREQUEST']._serialized_start=337
+  _globals['_EDITMESSAGEREQUEST']._serialized_end=429
+  _globals['_CHATCHUNK']._serialized_start=432
+  _globals['_CHATCHUNK']._serialized_end=596
+  _globals['_CHATMETA']._serialized_start=598
+  _globals['_CHATMETA']._serialized_end=668
+  _globals['_CHATUSAGE']._serialized_start=670
+  _globals['_CHATUSAGE']._serialized_end=726
+  _globals['_CHATCONFIDENCE']._serialized_start=728
+  _globals['_CHATCONFIDENCE']._serialized_end=778
+  _globals['_FLOWREQUEST']._serialized_start=780
+  _globals['_FLOWREQUEST']._serialized_end=858
+  _globals['_FLOWEVENT']._serialized_start=860
+  _globals['_FLOWEVENT']._serialized_end=917
+  _globals['_BRAINSERVICE']._serialized_start=920
+  _globals['_BRAINSERVICE']._serialized_end=1323
 # @@protoc_insertion_point(module_scope)

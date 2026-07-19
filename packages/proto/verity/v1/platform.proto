@@ -1,0 +1,232 @@
+syntax = "proto3";
+
+package verity.v1;
+
+option go_package = "github.com/electric13k/verity/packages/proto/gen/go/verity/v1;verityv1";
+
+// Platform: the persistence & platform surface of the Python brain
+// (conversations, provider keys, offices, skills, MCP, upload, branching).
+// Registered on the same brain gRPC server; called by the gateway only.
+// Tenant identity comes from gRPC metadata (x-verity-user-id) — never from a
+// request body. Every repo query filters by that user id and fails closed.
+service PlatformService {
+  // --- Conversations (P2) ------------------------------------------------
+  rpc ListConversations(ListConversationsRequest) returns (ListConversationsResponse);
+  rpc CreateConversation(CreateConversationRequest) returns (Conversation);
+  rpc GetConversation(IdRequest) returns (ConversationDetail);
+  rpc UpdateConversation(UpdateConversationRequest) returns (Conversation);
+  rpc DeleteConversation(IdRequest) returns (Empty);
+
+  // --- Provider keys (P3) ------------------------------------------------
+  rpc ListProviderKeys(Empty) returns (ProviderKeysResponse);
+  rpc PutProviderKey(PutProviderKeyRequest) returns (ProviderKeyStatus);
+  rpc DeleteProviderKey(ProviderRequest) returns (Empty);
+  rpc GetMe(Empty) returns (MeResponse);
+
+  // --- Offices (P4) ------------------------------------------------------
+  rpc ListOffices(Empty) returns (OfficesResponse);
+  rpc CreateOffice(CreateOfficeRequest) returns (Office);
+  rpc RunOffice(IdRequest) returns (RunOfficeResponse);
+  rpc GetOfficeRun(GetOfficeRunRequest) returns (OfficeRunDetail);
+
+  // --- Skills (P5) -------------------------------------------------------
+  rpc ListSkills(Empty) returns (SkillsResponse);
+
+  // --- MCP (P5) ----------------------------------------------------------
+  rpc ListMcpServers(Empty) returns (McpServersResponse);
+  rpc CreateMcpServer(CreateMcpServerRequest) returns (McpServer);
+  rpc McpCall(McpCallRequest) returns (McpCallResponse);
+
+  // --- Upload (P6) -------------------------------------------------------
+  rpc UploadFile(UploadFileRequest) returns (UploadFileResponse);
+
+  // --- Branching (P7) ----------------------------------------------------
+  rpc CreateBranch(CreateBranchRequest) returns (CreateBranchResponse);
+}
+
+message Empty {}
+
+// Generic single-id request (conversation id, office id, ...). The id is a
+// handle only; ownership is always re-checked against the tenant metadata.
+message IdRequest {
+  string id = 1;
+}
+
+// --- Conversations ---------------------------------------------------------
+
+message ListConversationsRequest {
+  string cursor = 1;   // opaque; empty = first page
+}
+
+message ListConversationsResponse {
+  repeated Conversation items = 1;
+  string next_cursor = 2;
+}
+
+message Conversation {
+  string id = 1;
+  string title = 2;
+  string created_at = 3;   // RFC3339
+  string updated_at = 4;   // RFC3339
+}
+
+message CreateConversationRequest {
+  string title = 1;
+}
+
+message UpdateConversationRequest {
+  string id = 1;
+  string title = 2;
+}
+
+message ConversationDetail {
+  string id = 1;
+  string title = 2;
+  repeated Message messages = 3;
+}
+
+message Message {
+  string id = 1;
+  string role = 2;         // user | assistant | system
+  string content = 3;
+  string created_at = 4;   // RFC3339
+  uint32 confidence = 5;   // 0-100; 0 = unset
+  bool has_confidence = 6;
+}
+
+// --- Provider keys ---------------------------------------------------------
+
+message ProviderRequest {
+  string provider = 1;
+}
+
+message PutProviderKeyRequest {
+  string provider = 1;
+  string key = 2;          // plaintext key; encrypted in the vault, never stored/logged raw
+}
+
+message ProviderKeyStatus {
+  string provider = 1;
+  bool configured = 2;
+}
+
+message ProviderKeysResponse {
+  repeated ProviderKeyStatus providers = 1;
+}
+
+message MeResponse {
+  string user_id = 1;
+  repeated ProviderInfo providers = 2;
+}
+
+message ProviderInfo {
+  string id = 1;
+  bool configured = 2;   // user has a vaulted key OR env fallback exists
+  bool house = 3;        // provided by Verity (env-gated, no user key)
+}
+
+// --- Offices ---------------------------------------------------------------
+
+message Office {
+  string id = 1;
+  string name = 2;
+  string schedule = 3;
+  string brief = 4;      // the office task/brief
+  string status = 5;     // enabled | disabled
+}
+
+message OfficesResponse {
+  repeated Office items = 1;
+}
+
+message CreateOfficeRequest {
+  string name = 1;
+  string schedule = 2;
+  string brief = 3;
+  string flow_kind = 4;  // empty = auto-pick
+  string model = 5;      // provider:model; empty = default
+  uint32 workers = 6;    // 0 = default
+}
+
+message RunOfficeResponse {
+  string run_id = 1;
+}
+
+message GetOfficeRunRequest {
+  string office_id = 1;
+  string run_id = 2;
+}
+
+message OfficeRunDetail {
+  string run_id = 1;
+  string office_id = 2;
+  string status = 3;
+  string state_md = 4;   // STATE.md checkpoint contents
+  string started_at = 5;
+  string finished_at = 6;
+}
+
+// --- Skills ----------------------------------------------------------------
+
+message SkillsResponse {
+  repeated SkillInfo skills = 1;
+  bool execution_available = 2;  // true only if the executor's isolation check passes
+}
+
+message SkillInfo {
+  string name = 1;
+  string description = 2;
+}
+
+// --- MCP -------------------------------------------------------------------
+
+message McpServer {
+  string id = 1;
+  string name = 2;
+  string base_url = 3;
+}
+
+message McpServersResponse {
+  repeated McpServer items = 1;
+}
+
+message CreateMcpServerRequest {
+  string name = 1;
+  string base_url = 2;
+}
+
+message McpCallRequest {
+  string server_id = 1;
+  string tool = 2;
+  string args_json = 3;  // JSON object of tool arguments
+}
+
+message McpCallResponse {
+  string output = 1;     // wrapped/sanitized tool output, prompt-safe
+}
+
+// --- Upload ----------------------------------------------------------------
+
+message UploadFileRequest {
+  string name = 1;
+  string content_type = 2;
+  bytes content = 3;     // raw uploaded bytes; converted via markitdown
+}
+
+message UploadFileResponse {
+  string file_id = 1;
+  string name = 2;
+  uint32 markdown_bytes = 3;
+}
+
+// --- Branching -------------------------------------------------------------
+
+message CreateBranchRequest {
+  string message_id = 1;
+  string kind = 2;       // flow | office
+  string brief = 3;      // optional extra brief; conversation context is carried
+}
+
+message CreateBranchResponse {
+  string run_id = 1;
+}

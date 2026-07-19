@@ -19,10 +19,12 @@ import (
 const _ = grpc.SupportPackageIsVersion9
 
 const (
-	BrainService_Health_FullMethodName     = "/verity.v1.BrainService/Health"
-	BrainService_Hello_FullMethodName      = "/verity.v1.BrainService/Hello"
-	BrainService_ChatStream_FullMethodName = "/verity.v1.BrainService/ChatStream"
-	BrainService_RunFlow_FullMethodName    = "/verity.v1.BrainService/RunFlow"
+	BrainService_Health_FullMethodName            = "/verity.v1.BrainService/Health"
+	BrainService_Hello_FullMethodName             = "/verity.v1.BrainService/Hello"
+	BrainService_ChatStream_FullMethodName        = "/verity.v1.BrainService/ChatStream"
+	BrainService_RegenerateMessage_FullMethodName = "/verity.v1.BrainService/RegenerateMessage"
+	BrainService_EditMessage_FullMethodName       = "/verity.v1.BrainService/EditMessage"
+	BrainService_RunFlow_FullMethodName           = "/verity.v1.BrainService/RunFlow"
 )
 
 // BrainServiceClient is the client API for BrainService service.
@@ -36,8 +38,16 @@ type BrainServiceClient interface {
 	// M1 hello-path: gateway → brain round trip proving the spine.
 	Hello(ctx context.Context, in *HelloRequest, opts ...grpc.CallOption) (*HelloResponse, error)
 	// Chat streaming (M3). One request, server-streamed chunks; the gateway
-	// fans out to the client as SSE.
+	// fans out to the client as SSE. The first chunk is a ChatMeta carrying the
+	// (possibly new) conversation id, the assistant message id, and an
+	// auto-generated title for brand-new conversations.
 	ChatStream(ctx context.Context, in *ChatRequest, opts ...grpc.CallOption) (grpc.ServerStreamingClient[ChatChunk], error)
+	// Regenerate an assistant message: drops the old assistant turn and streams
+	// a fresh one against the same preceding user message + history.
+	RegenerateMessage(ctx context.Context, in *RegenerateRequest, opts ...grpc.CallOption) (grpc.ServerStreamingClient[ChatChunk], error)
+	// Edit a user message: rewrites its content, truncates every later message
+	// in the conversation, then streams a fresh assistant reply.
+	EditMessage(ctx context.Context, in *EditMessageRequest, opts ...grpc.CallOption) (grpc.ServerStreamingClient[ChatChunk], error)
 	// Flow execution (M5): conductor/workers/inspector roles over a task,
 	// streamed phase by phase. Blind Orchestration Protocol applies: events
 	// crossing this boundary carry task substance, never machinery.
@@ -91,9 +101,47 @@ func (c *brainServiceClient) ChatStream(ctx context.Context, in *ChatRequest, op
 // This type alias is provided for backwards compatibility with existing code that references the prior non-generic stream type by name.
 type BrainService_ChatStreamClient = grpc.ServerStreamingClient[ChatChunk]
 
+func (c *brainServiceClient) RegenerateMessage(ctx context.Context, in *RegenerateRequest, opts ...grpc.CallOption) (grpc.ServerStreamingClient[ChatChunk], error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	stream, err := c.cc.NewStream(ctx, &BrainService_ServiceDesc.Streams[1], BrainService_RegenerateMessage_FullMethodName, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	x := &grpc.GenericClientStream[RegenerateRequest, ChatChunk]{ClientStream: stream}
+	if err := x.ClientStream.SendMsg(in); err != nil {
+		return nil, err
+	}
+	if err := x.ClientStream.CloseSend(); err != nil {
+		return nil, err
+	}
+	return x, nil
+}
+
+// This type alias is provided for backwards compatibility with existing code that references the prior non-generic stream type by name.
+type BrainService_RegenerateMessageClient = grpc.ServerStreamingClient[ChatChunk]
+
+func (c *brainServiceClient) EditMessage(ctx context.Context, in *EditMessageRequest, opts ...grpc.CallOption) (grpc.ServerStreamingClient[ChatChunk], error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	stream, err := c.cc.NewStream(ctx, &BrainService_ServiceDesc.Streams[2], BrainService_EditMessage_FullMethodName, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	x := &grpc.GenericClientStream[EditMessageRequest, ChatChunk]{ClientStream: stream}
+	if err := x.ClientStream.SendMsg(in); err != nil {
+		return nil, err
+	}
+	if err := x.ClientStream.CloseSend(); err != nil {
+		return nil, err
+	}
+	return x, nil
+}
+
+// This type alias is provided for backwards compatibility with existing code that references the prior non-generic stream type by name.
+type BrainService_EditMessageClient = grpc.ServerStreamingClient[ChatChunk]
+
 func (c *brainServiceClient) RunFlow(ctx context.Context, in *FlowRequest, opts ...grpc.CallOption) (grpc.ServerStreamingClient[FlowEvent], error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	stream, err := c.cc.NewStream(ctx, &BrainService_ServiceDesc.Streams[1], BrainService_RunFlow_FullMethodName, cOpts...)
+	stream, err := c.cc.NewStream(ctx, &BrainService_ServiceDesc.Streams[3], BrainService_RunFlow_FullMethodName, cOpts...)
 	if err != nil {
 		return nil, err
 	}
@@ -121,8 +169,16 @@ type BrainServiceServer interface {
 	// M1 hello-path: gateway → brain round trip proving the spine.
 	Hello(context.Context, *HelloRequest) (*HelloResponse, error)
 	// Chat streaming (M3). One request, server-streamed chunks; the gateway
-	// fans out to the client as SSE.
+	// fans out to the client as SSE. The first chunk is a ChatMeta carrying the
+	// (possibly new) conversation id, the assistant message id, and an
+	// auto-generated title for brand-new conversations.
 	ChatStream(*ChatRequest, grpc.ServerStreamingServer[ChatChunk]) error
+	// Regenerate an assistant message: drops the old assistant turn and streams
+	// a fresh one against the same preceding user message + history.
+	RegenerateMessage(*RegenerateRequest, grpc.ServerStreamingServer[ChatChunk]) error
+	// Edit a user message: rewrites its content, truncates every later message
+	// in the conversation, then streams a fresh assistant reply.
+	EditMessage(*EditMessageRequest, grpc.ServerStreamingServer[ChatChunk]) error
 	// Flow execution (M5): conductor/workers/inspector roles over a task,
 	// streamed phase by phase. Blind Orchestration Protocol applies: events
 	// crossing this boundary carry task substance, never machinery.
@@ -145,6 +201,12 @@ func (UnimplementedBrainServiceServer) Hello(context.Context, *HelloRequest) (*H
 }
 func (UnimplementedBrainServiceServer) ChatStream(*ChatRequest, grpc.ServerStreamingServer[ChatChunk]) error {
 	return status.Errorf(codes.Unimplemented, "method ChatStream not implemented")
+}
+func (UnimplementedBrainServiceServer) RegenerateMessage(*RegenerateRequest, grpc.ServerStreamingServer[ChatChunk]) error {
+	return status.Errorf(codes.Unimplemented, "method RegenerateMessage not implemented")
+}
+func (UnimplementedBrainServiceServer) EditMessage(*EditMessageRequest, grpc.ServerStreamingServer[ChatChunk]) error {
+	return status.Errorf(codes.Unimplemented, "method EditMessage not implemented")
 }
 func (UnimplementedBrainServiceServer) RunFlow(*FlowRequest, grpc.ServerStreamingServer[FlowEvent]) error {
 	return status.Errorf(codes.Unimplemented, "method RunFlow not implemented")
@@ -217,6 +279,28 @@ func _BrainService_ChatStream_Handler(srv interface{}, stream grpc.ServerStream)
 // This type alias is provided for backwards compatibility with existing code that references the prior non-generic stream type by name.
 type BrainService_ChatStreamServer = grpc.ServerStreamingServer[ChatChunk]
 
+func _BrainService_RegenerateMessage_Handler(srv interface{}, stream grpc.ServerStream) error {
+	m := new(RegenerateRequest)
+	if err := stream.RecvMsg(m); err != nil {
+		return err
+	}
+	return srv.(BrainServiceServer).RegenerateMessage(m, &grpc.GenericServerStream[RegenerateRequest, ChatChunk]{ServerStream: stream})
+}
+
+// This type alias is provided for backwards compatibility with existing code that references the prior non-generic stream type by name.
+type BrainService_RegenerateMessageServer = grpc.ServerStreamingServer[ChatChunk]
+
+func _BrainService_EditMessage_Handler(srv interface{}, stream grpc.ServerStream) error {
+	m := new(EditMessageRequest)
+	if err := stream.RecvMsg(m); err != nil {
+		return err
+	}
+	return srv.(BrainServiceServer).EditMessage(m, &grpc.GenericServerStream[EditMessageRequest, ChatChunk]{ServerStream: stream})
+}
+
+// This type alias is provided for backwards compatibility with existing code that references the prior non-generic stream type by name.
+type BrainService_EditMessageServer = grpc.ServerStreamingServer[ChatChunk]
+
 func _BrainService_RunFlow_Handler(srv interface{}, stream grpc.ServerStream) error {
 	m := new(FlowRequest)
 	if err := stream.RecvMsg(m); err != nil {
@@ -248,6 +332,16 @@ var BrainService_ServiceDesc = grpc.ServiceDesc{
 		{
 			StreamName:    "ChatStream",
 			Handler:       _BrainService_ChatStream_Handler,
+			ServerStreams: true,
+		},
+		{
+			StreamName:    "RegenerateMessage",
+			Handler:       _BrainService_RegenerateMessage_Handler,
+			ServerStreams: true,
+		},
+		{
+			StreamName:    "EditMessage",
+			Handler:       _BrainService_EditMessage_Handler,
 			ServerStreams: true,
 		},
 		{
