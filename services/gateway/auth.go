@@ -11,6 +11,7 @@ package main
 import (
 	"errors"
 	"log/slog"
+	"net/url"
 	"os"
 	"strings"
 
@@ -28,6 +29,36 @@ type authenticator struct {
 	devMode   bool
 	devUserID string
 	keys      keyfunc.Keyfunc // nil when Clerk is unconfigured
+	// issuer is the expected Clerk instance origin. Empty = issuer check is
+	// skipped (logged once at boot). Verified against the token `iss` claim.
+	issuer string
+	// allowedAZP is the set of authorized parties (Clerk `azp`, the request
+	// origin) accepted. Empty = azp check skipped (the claim is optional and
+	// only present on some Clerk templates).
+	allowedAZP map[string]bool
+}
+
+// issuerFromJWKS derives the Clerk instance issuer (scheme://host) from the
+// JWKS URL (…/.well-known/jwks.json). Clerk's `iss` is exactly that origin.
+func issuerFromJWKS(jwksURL string) string {
+	u, err := url.Parse(jwksURL)
+	if err != nil || u.Scheme == "" || u.Host == "" {
+		return ""
+	}
+	return u.Scheme + "://" + u.Host
+}
+
+func parseAllowedAZP(raw string) map[string]bool {
+	if strings.TrimSpace(raw) == "" {
+		return nil
+	}
+	set := map[string]bool{}
+	for _, p := range strings.Split(raw, ",") {
+		if p = strings.TrimSpace(p); p != "" {
+			set[p] = true
+		}
+	}
+	return set
 }
 
 func newAuthenticator() *authenticator {
@@ -51,6 +82,23 @@ func newAuthenticator() *authenticator {
 		return a
 	}
 	a.keys = keys
+
+	// Issuer: prefer an explicit CLERK_ISSUER, else derive from the JWKS host.
+	// Degrade, never die: if neither yields an issuer, log once and skip the
+	// iss check rather than refuse to boot.
+	a.issuer = os.Getenv("CLERK_ISSUER")
+	if a.issuer == "" {
+		a.issuer = issuerFromJWKS(jwksURL)
+	}
+	if a.issuer == "" {
+		slog.Warn("no issuer configured (set CLERK_ISSUER or a well-formed CLERK_JWKS_URL); skipping iss validation")
+	}
+
+	// azp: optional allow-list of authorized parties (request origins).
+	a.allowedAZP = parseAllowedAZP(os.Getenv("VERITY_ALLOWED_ORIGINS"))
+	if a.allowedAZP == nil {
+		slog.Info("VERITY_ALLOWED_ORIGINS unset; skipping azp validation (accepting any authorized party)")
+	}
 	return a
 }
 
@@ -72,10 +120,24 @@ func (a *authenticator) verify(c fiber.Ctx) (userID, orgID string, err error) {
 		return "", "", errNoToken
 	}
 	claims := jwt.MapClaims{}
-	parsed, err := jwt.ParseWithClaims(token, claims, a.keys.Keyfunc,
-		jwt.WithValidMethods([]string{"RS256"}))
+	opts := []jwt.ParserOption{jwt.WithValidMethods([]string{"RS256"})}
+	// When an issuer is configured, jwt/v5 enforces exact iss match (and
+	// requires the claim present). Unset issuer degrades to no iss check.
+	if a.issuer != "" {
+		opts = append(opts, jwt.WithIssuer(a.issuer))
+	}
+	parsed, err := jwt.ParseWithClaims(token, claims, a.keys.Keyfunc, opts...)
 	if err != nil || !parsed.Valid {
 		return "", "", errors.New("invalid session token")
+	}
+	// azp (authorized party) — defense in depth against tokens minted for a
+	// different frontend on the same Clerk instance. Only enforced when an
+	// allow-list is configured.
+	if a.allowedAZP != nil {
+		azp, _ := claims["azp"].(string)
+		if !a.allowedAZP[azp] {
+			return "", "", errors.New("session token azp not allowed")
+		}
 	}
 	sub, _ := claims["sub"].(string)
 	if sub == "" {

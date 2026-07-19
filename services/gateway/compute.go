@@ -23,7 +23,10 @@ type submitJobRequest struct {
 
 func (s *spine) registerCompute(v1 fiber.Router) {
 	// Job submission gets its own (tighter) bucket on top of the api bucket.
-	v1.Post("/compute/jobs", func(c fiber.Ctx) error {
+	// The limiter MUST precede the handler: the handler returns its JSON
+	// response without calling c.Next(), so a limiter registered after it is
+	// dead code. Order is [rateLimit, handler].
+	handler := func(c fiber.Ctx) error {
 		payload, err := decodeStrict[submitJobRequest](c)
 		if err != nil {
 			return badRequest(c, err)
@@ -43,5 +46,6 @@ func (s *spine) registerCompute(v1 fiber.Router) {
 			"job_id":       resp.JobId,
 			"work_unit_id": resp.WorkUnitId,
 		})
-	}, rateLimit("compute", 30, 10))
+	}
+	v1.Post("/compute/jobs", rateLimit("compute", 30, 10), handler)
 }

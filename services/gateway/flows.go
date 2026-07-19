@@ -63,6 +63,8 @@ func (s *spine) registerFlows(v1 fiber.Router) {
 			}
 		})
 	}
-	// Flows are heavier than chat: tighter bucket.
-	v1.Post("/flows", handler, rateLimit("flow", 20, 5))
+	// Flows are heavier than chat: tighter bucket. The limiter MUST precede the
+	// handler — the SSE handler never calls c.Next(), so a limiter registered
+	// after it is dead code. Order is [rateLimit, handler].
+	v1.Post("/flows", rateLimit("flow", 20, 5), handler)
 }

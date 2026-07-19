@@ -65,7 +65,9 @@ class ObsidianStore:
         directory = self._user_dir(user_id, item.scope)
         directory.mkdir(parents=True, exist_ok=True)
         name = f"{int(time.time() * 1000)}-{_slugify(item.content)}.md"
-        (directory / name).write_text(_frontmatter(item) + item.content + "\n")
+        (directory / name).write_text(
+            _frontmatter(item) + item.content + "\n", encoding="utf-8"
+        )
 
     async def search(self, user_id: str, scope: str, query: str, k: int) -> list[MemoryItem]:
         directory = self._user_dir(user_id, scope)
@@ -76,7 +78,7 @@ class ObsidianStore:
             return []
         scored: list[tuple[float, MemoryItem]] = []
         for note in directory.glob("*.md"):
-            meta, body = _parse(note.read_text())
+            meta, body = _parse(note.read_text(encoding="utf-8"))
             try:
                 importance = float(meta.get("importance", 0.5))
             except ValueError:

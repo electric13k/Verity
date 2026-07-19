@@ -111,8 +111,13 @@ impl CoreService for CoreGrpc {
             .ok_or_else(|| Status::unavailable("vector search not configured (QDRANT_URL)"))?;
 
         let r = req.into_inner();
-        if r.collection.is_empty() || r.vector.is_empty() {
+        if r.vector.is_empty() {
             return Err(Status::invalid_argument("collection and vector are required"));
+        }
+        // Collection is interpolated into the Qdrant URL path; validate its
+        // charset before building the request so it can't reshape the path.
+        if !qdrant::valid_collection_name(&r.collection) {
+            return Err(Status::invalid_argument("invalid collection name"));
         }
         let limit = if r.limit == 0 { 10 } else { r.limit.min(100) };
         let body = qdrant::search_body(&user_id, &r.vector, limit);

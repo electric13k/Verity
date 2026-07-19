@@ -13,6 +13,17 @@ import (
 	"github.com/gofiber/fiber/v3"
 )
 
+// idleBucketTTL: a bucket untouched for this long is evicted (M1). Eviction is
+// behaviour-preserving — an idle bucket has fully refilled to `burst`, which is
+// identical to the fresh bucket a later request would create — so the sweep can
+// never let a limited user slip past. It only bounds memory. The TTL is kept
+// comfortably larger than any route's full-refill time (burst/rate seconds).
+const idleBucketTTL = 10 * time.Minute
+
+// sweepInterval: how often the background sweeper runs. 0 disables it (used by
+// unit tests that drive sweep() directly and want no stray goroutine).
+const sweepInterval = time.Minute
+
 type bucket struct {
 	tokens float64
 	last   time.Time
@@ -23,14 +34,20 @@ type limiter struct {
 	buckets map[string]*bucket
 	rate    float64 // tokens per second
 	burst   float64
+	ttl     time.Duration
 }
 
 func newLimiter(ratePerMin float64, burst int) *limiter {
-	return &limiter{
+	l := &limiter{
 		buckets: make(map[string]*bucket),
 		rate:    ratePerMin / 60.0,
 		burst:   float64(burst),
+		ttl:     idleBucketTTL,
 	}
+	if sweepInterval > 0 {
+		go l.sweepLoop(sweepInterval)
+	}
+	return l
 }
 
 func (l *limiter) allow(key string, now time.Time) bool {
@@ -51,6 +68,36 @@ func (l *limiter) allow(key string, now time.Time) bool {
 	}
 	b.tokens--
 	return true
+}
+
+// sweep evicts buckets idle for longer than the TTL. Behaviour-preserving:
+// an evicted bucket had refilled to full burst, so a subsequent request just
+// recreates an identical fresh bucket. Returns the count evicted (for tests).
+func (l *limiter) sweep(now time.Time) int {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	evicted := 0
+	for key, b := range l.buckets {
+		if now.Sub(b.last) > l.ttl {
+			delete(l.buckets, key)
+			evicted++
+		}
+	}
+	return evicted
+}
+
+func (l *limiter) size() int {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	return len(l.buckets)
+}
+
+func (l *limiter) sweepLoop(interval time.Duration) {
+	ticker := time.NewTicker(interval)
+	defer ticker.Stop()
+	for now := range ticker.C {
+		l.sweep(now)
+	}
 }
 
 // rateLimit builds middleware for one route class. Must run after

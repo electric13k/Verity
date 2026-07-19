@@ -29,6 +29,35 @@ VERSION = "0.1.0"
 
 METADATA_KEYS = ("x-verity-user-id", "x-verity-org-id", "x-verity-request-id")
 
+# Continuous-learning tasks run off the response path (never block the user).
+# Two hazards the naive create_task() had (M5): the loop may GC a pending task
+# that nothing references, and there was no ceiling on concurrent/queued
+# learning writes. We fix both: hold a strong reference in a set (discarded via
+# done-callback), gate execution behind a bounded semaphore, and shed the
+# exchange when the backlog is full — learning is best-effort, so dropping
+# under overload is correct and keeps memory bounded.
+LEARNING_CONCURRENCY = 8
+MAX_PENDING_LEARNING = 256
+_learning_tasks: set[asyncio.Task] = set()
+_learning_sem = asyncio.Semaphore(LEARNING_CONCURRENCY)
+
+
+async def _guarded_learn(coro) -> None:
+    async with _learning_sem:
+        await coro
+
+
+def spawn_learning(coro) -> None:
+    """Fire-and-forget a learning coroutine with a strong reference and a
+    concurrency/backlog bound. Sheds (and closes the coroutine) when full."""
+    if len(_learning_tasks) >= MAX_PENDING_LEARNING:
+        log.warning("learning backlog full (%d); shedding this exchange", MAX_PENDING_LEARNING)
+        coro.close()
+        return
+    task = asyncio.get_running_loop().create_task(_guarded_learn(coro))
+    _learning_tasks.add(task)
+    task.add_done_callback(_learning_tasks.discard)
+
 
 def forwarded_metadata(context: grpc.aio.ServicerContext) -> list[tuple[str, str]]:
     """Propagate verity metadata (tenant ctx + request id) to downstream calls."""
@@ -129,7 +158,7 @@ class BrainServicer(brain_pb2_grpc.BrainServiceServicer):
         )
 
         # Continuous learning — off the response path, never blocks the user.
-        asyncio.get_running_loop().create_task(
+        spawn_learning(
             memory_service.learn_from_exchange(
                 tenant.user_id, request.user_message, full_response
             )
@@ -167,7 +196,7 @@ class BrainServicer(brain_pb2_grpc.BrainServiceServicer):
             return
         if final:
             # learning loop hears flow outcomes too (plan §0)
-            asyncio.get_running_loop().create_task(
+            spawn_learning(
                 memory_service.learn_from_exchange(tenant.user_id, request.task, final)
             )
 

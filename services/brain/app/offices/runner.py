@@ -43,7 +43,9 @@ def load_offices(directory: str | Path) -> list[OfficeDefinition]:
         return []
     offices = []
     for path in sorted(root.glob("*.json")):
-        offices.append(OfficeDefinition.model_validate(json.loads(path.read_text())))
+        offices.append(
+            OfficeDefinition.model_validate(json.loads(path.read_text(encoding="utf-8")))
+        )
     return offices
 
 
@@ -77,7 +79,7 @@ class OfficeRun:
         for role, phase, content in self.phases:
             lines += [f"### {phase} ({role})", content or "(no output)", ""]
         self.state_dir.mkdir(parents=True, exist_ok=True)
-        self.state_path.write_text("\n".join(lines))
+        self.state_path.write_text("\n".join(lines), encoding="utf-8")
 
 
 class OfficeRunner:

@@ -99,5 +99,8 @@ func (s *spine) registerChat(v1 fiber.Router) {
 		})
 	}
 	// Chat has its own (tighter) bucket on top of the group-level api bucket.
-	v1.Post("/chat", handler, rateLimit("chat", 60, 10))
+	// The limiter MUST precede the handler: the SSE handler returns via
+	// SendStreamWriter without calling c.Next(), so any middleware registered
+	// AFTER it never runs. Order is [rateLimit, handler].
+	v1.Post("/chat", rateLimit("chat", 60, 10), handler)
 }
