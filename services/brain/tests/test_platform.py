@@ -154,9 +154,11 @@ def mcp_fake_server(request: httpx.Request) -> httpx.Response:
     return httpx.Response(200, json={"jsonrpc": "2.0", "id": rid, "result": result})
 
 
-async def test_mcp_list_and_call():
+async def test_mcp_list_and_call(monkeypatch):
+    # SSRF guard resolves the host; point it at a public address for the mock.
+    monkeypatch.setattr("app.mcp_client.resolve_host", lambda host: ["93.184.216.34"])
     client = MCPClient(
-        "http://mcp.test/rpc",
+        "https://mcp.test/rpc",
         client=httpx.AsyncClient(transport=httpx.MockTransport(mcp_fake_server)),
     )
     tools = await client.list_tools()
@@ -167,8 +169,9 @@ async def test_mcp_list_and_call():
 
 
 async def test_mcp_requires_consent():
+    # Consent is checked before any network call, so no SSRF resolution runs.
     client = MCPClient(
-        "http://mcp.test/rpc",
+        "https://mcp.test/rpc",
         client=httpx.AsyncClient(transport=httpx.MockTransport(mcp_fake_server)),
     )
     with pytest.raises(ConsentRequired):
