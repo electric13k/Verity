@@ -134,6 +134,11 @@ class PlatformServiceStub:
                 request_serializer=verity_dot_v1_dot_platform__pb2.CreateBranchRequest.SerializeToString,
                 response_deserializer=verity_dot_v1_dot_platform__pb2.CreateBranchResponse.FromString,
                 _registered_method=True)
+        self.GetTranscript = channel.unary_unary(
+                '/verity.v1.PlatformService/GetTranscript',
+                request_serializer=verity_dot_v1_dot_platform__pb2.TranscriptRequest.SerializeToString,
+                response_deserializer=verity_dot_v1_dot_platform__pb2.TranscriptResponse.FromString,
+                _registered_method=True)
 
 
 class PlatformServiceServicer:
@@ -265,6 +270,15 @@ class PlatformServiceServicer:
         context.set_details('Method not implemented!')
         raise NotImplementedError('Method not implemented!')
 
+    def GetTranscript(self, request, context):
+        """--- Transcripts (P7) --------------------------------------------------
+        PUBLIC read-only. Keyed by an unguessable share id (the bearer capability)
+        — NO tenant metadata is consulted, so the gateway serves it without auth.
+        """
+        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        context.set_details('Method not implemented!')
+        raise NotImplementedError('Method not implemented!')
+
 
 def add_PlatformServiceServicer_to_server(servicer, server):
     rpc_method_handlers = {
@@ -362,6 +376,11 @@ def add_PlatformServiceServicer_to_server(servicer, server):
                     servicer.CreateBranch,
                     request_deserializer=verity_dot_v1_dot_platform__pb2.CreateBranchRequest.FromString,
                     response_serializer=verity_dot_v1_dot_platform__pb2.CreateBranchResponse.SerializeToString,
+            ),
+            'GetTranscript': grpc.unary_unary_rpc_method_handler(
+                    servicer.GetTranscript,
+                    request_deserializer=verity_dot_v1_dot_platform__pb2.TranscriptRequest.FromString,
+                    response_serializer=verity_dot_v1_dot_platform__pb2.TranscriptResponse.SerializeToString,
             ),
     }
     generic_handler = grpc.method_handlers_generic_handler(
@@ -882,6 +901,33 @@ class PlatformService:
             '/verity.v1.PlatformService/CreateBranch',
             verity_dot_v1_dot_platform__pb2.CreateBranchRequest.SerializeToString,
             verity_dot_v1_dot_platform__pb2.CreateBranchResponse.FromString,
+            options,
+            channel_credentials,
+            insecure,
+            call_credentials,
+            compression,
+            wait_for_ready,
+            timeout,
+            metadata,
+            _registered_method=True)
+
+    @staticmethod
+    def GetTranscript(request,
+            target,
+            options=(),
+            channel_credentials=None,
+            call_credentials=None,
+            insecure=False,
+            compression=None,
+            wait_for_ready=None,
+            timeout=None,
+            metadata=None):
+        return grpc.experimental.unary_unary(
+            request,
+            target,
+            '/verity.v1.PlatformService/GetTranscript',
+            verity_dot_v1_dot_platform__pb2.TranscriptRequest.SerializeToString,
+            verity_dot_v1_dot_platform__pb2.TranscriptResponse.FromString,
             options,
             channel_credentials,
             insecure,

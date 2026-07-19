@@ -79,6 +79,10 @@ func main() {
 		sp.registerChat(v1)
 		sp.registerFlows(v1)
 		sp.registerCompute(v1)
+		sp.registerPlatform(v1)
+		// Public, unauthenticated read-only transcript view — mounted on the
+		// app, outside the /v1 auth group (the share id is the capability).
+		sp.registerTranscripts(app)
 	}
 
 	addr := os.Getenv("GATEWAY_ADDR")

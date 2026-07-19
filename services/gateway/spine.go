@@ -27,6 +27,10 @@ func envOr(key, fallback string) string {
 
 type spine struct {
 	brain verityv1.BrainServiceClient
+	// platform is the persistence & platform surface (conversations, provider
+	// keys, offices, skills, MCP, upload, branching, transcripts), served on
+	// the same brain gRPC server.
+	platform verityv1.PlatformServiceClient
 	// coord is the compute-network coordinator, served by the Rust core. Only
 	// the user-facing SubmitJob is exposed through the gateway; node-facing
 	// RPCs (register/claim/result) are spoken directly by the node daemon.
@@ -47,8 +51,9 @@ func newSpine() (*spine, error) {
 		return nil, err
 	}
 	return &spine{
-		brain: verityv1.NewBrainServiceClient(brainConn),
-		coord: verityv1.NewCoordinatorServiceClient(coreConn),
+		brain:    verityv1.NewBrainServiceClient(brainConn),
+		platform: verityv1.NewPlatformServiceClient(brainConn),
+		coord:    verityv1.NewCoordinatorServiceClient(coreConn),
 	}, nil
 }
 

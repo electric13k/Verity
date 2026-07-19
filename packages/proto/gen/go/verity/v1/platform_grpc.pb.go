@@ -38,6 +38,7 @@ const (
 	PlatformService_McpCall_FullMethodName            = "/verity.v1.PlatformService/McpCall"
 	PlatformService_UploadFile_FullMethodName         = "/verity.v1.PlatformService/UploadFile"
 	PlatformService_CreateBranch_FullMethodName       = "/verity.v1.PlatformService/CreateBranch"
+	PlatformService_GetTranscript_FullMethodName      = "/verity.v1.PlatformService/GetTranscript"
 )
 
 // PlatformServiceClient is the client API for PlatformService service.
@@ -76,6 +77,10 @@ type PlatformServiceClient interface {
 	UploadFile(ctx context.Context, in *UploadFileRequest, opts ...grpc.CallOption) (*UploadFileResponse, error)
 	// --- Branching (P7) ----------------------------------------------------
 	CreateBranch(ctx context.Context, in *CreateBranchRequest, opts ...grpc.CallOption) (*CreateBranchResponse, error)
+	// --- Transcripts (P7) --------------------------------------------------
+	// PUBLIC read-only. Keyed by an unguessable share id (the bearer capability)
+	// — NO tenant metadata is consulted, so the gateway serves it without auth.
+	GetTranscript(ctx context.Context, in *TranscriptRequest, opts ...grpc.CallOption) (*TranscriptResponse, error)
 }
 
 type platformServiceClient struct {
@@ -276,6 +281,16 @@ func (c *platformServiceClient) CreateBranch(ctx context.Context, in *CreateBran
 	return out, nil
 }
 
+func (c *platformServiceClient) GetTranscript(ctx context.Context, in *TranscriptRequest, opts ...grpc.CallOption) (*TranscriptResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(TranscriptResponse)
+	err := c.cc.Invoke(ctx, PlatformService_GetTranscript_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // PlatformServiceServer is the server API for PlatformService service.
 // All implementations must embed UnimplementedPlatformServiceServer
 // for forward compatibility.
@@ -312,6 +327,10 @@ type PlatformServiceServer interface {
 	UploadFile(context.Context, *UploadFileRequest) (*UploadFileResponse, error)
 	// --- Branching (P7) ----------------------------------------------------
 	CreateBranch(context.Context, *CreateBranchRequest) (*CreateBranchResponse, error)
+	// --- Transcripts (P7) --------------------------------------------------
+	// PUBLIC read-only. Keyed by an unguessable share id (the bearer capability)
+	// — NO tenant metadata is consulted, so the gateway serves it without auth.
+	GetTranscript(context.Context, *TranscriptRequest) (*TranscriptResponse, error)
 	mustEmbedUnimplementedPlatformServiceServer()
 }
 
@@ -378,6 +397,9 @@ func (UnimplementedPlatformServiceServer) UploadFile(context.Context, *UploadFil
 }
 func (UnimplementedPlatformServiceServer) CreateBranch(context.Context, *CreateBranchRequest) (*CreateBranchResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method CreateBranch not implemented")
+}
+func (UnimplementedPlatformServiceServer) GetTranscript(context.Context, *TranscriptRequest) (*TranscriptResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method GetTranscript not implemented")
 }
 func (UnimplementedPlatformServiceServer) mustEmbedUnimplementedPlatformServiceServer() {}
 func (UnimplementedPlatformServiceServer) testEmbeddedByValue()                         {}
@@ -742,6 +764,24 @@ func _PlatformService_CreateBranch_Handler(srv interface{}, ctx context.Context,
 	return interceptor(ctx, in, info, handler)
 }
 
+func _PlatformService_GetTranscript_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(TranscriptRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(PlatformServiceServer).GetTranscript(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: PlatformService_GetTranscript_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(PlatformServiceServer).GetTranscript(ctx, req.(*TranscriptRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 // PlatformService_ServiceDesc is the grpc.ServiceDesc for PlatformService service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -824,6 +864,10 @@ var PlatformService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "CreateBranch",
 			Handler:    _PlatformService_CreateBranch_Handler,
+		},
+		{
+			MethodName: "GetTranscript",
+			Handler:    _PlatformService_GetTranscript_Handler,
 		},
 	},
 	Streams:  []grpc.StreamDesc{},

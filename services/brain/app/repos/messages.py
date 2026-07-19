@@ -95,6 +95,24 @@ async def all_for_conversation(user_id: str, conversation_id: str) -> list[Messa
     return [_row(r) for r in rows]
 
 
+async def for_conversation_public(conversation_id: str) -> list[MessageRow]:
+    """Messages for a shared transcript, addressed by conversation id ONLY.
+
+    No tenant filter: this backs the public GET /v1/transcripts/:share_id path,
+    where the unguessable share id (resolved to this conversation upstream) is
+    the read capability. Only user/assistant turns are exposed. Never call this
+    on a tenant-scoped path — use history()/all_for_conversation() there."""
+    pool = db.require()
+    async with pool.acquire() as conn:
+        rows = await conn.fetch(
+            "select id, conversation_id, role, content, model, confidence, created_at "
+            "from messages where conversation_id = $1 and role in ('user','assistant') "
+            "order by created_at asc",
+            conversation_id,
+        )
+    return [_row(r) for r in rows]
+
+
 async def update_content(
     user_id: str, message_id: str, content: str, confidence: int | None = None
 ) -> None:

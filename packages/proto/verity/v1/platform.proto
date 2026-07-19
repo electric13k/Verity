@@ -42,6 +42,11 @@ service PlatformService {
 
   // --- Branching (P7) ----------------------------------------------------
   rpc CreateBranch(CreateBranchRequest) returns (CreateBranchResponse);
+
+  // --- Transcripts (P7) --------------------------------------------------
+  // PUBLIC read-only. Keyed by an unguessable share id (the bearer capability)
+  // — NO tenant metadata is consulted, so the gateway serves it without auth.
+  rpc GetTranscript(TranscriptRequest) returns (TranscriptResponse);
 }
 
 message Empty {}
@@ -83,6 +88,7 @@ message ConversationDetail {
   string id = 1;
   string title = 2;
   repeated Message messages = 3;
+  string share_id = 4;   // unguessable public read token for /v1/transcripts/:share_id
 }
 
 message Message {
@@ -199,6 +205,9 @@ message McpCallRequest {
   string server_id = 1;
   string tool = 2;
   string args_json = 3;  // JSON object of tool arguments
+  bool consent = 4;      // user approved this tool this call; records a grant.
+                         // A call is refused (PERMISSION_DENIED) unless a grant
+                         // already exists OR consent is true here (fail closed).
 }
 
 message McpCallResponse {
@@ -229,4 +238,17 @@ message CreateBranchRequest {
 
 message CreateBranchResponse {
   string run_id = 1;
+  string kind = 2;   // flow | office (echoes the run kind for client routing)
+}
+
+// --- Transcripts -----------------------------------------------------------
+
+message TranscriptRequest {
+  string share_id = 1;   // tokened, unguessable; the read capability
+}
+
+message TranscriptResponse {
+  string title = 1;
+  repeated Message messages = 2;
+  string created_at = 3;   // RFC3339
 }

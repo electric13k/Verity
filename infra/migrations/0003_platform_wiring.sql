@@ -50,4 +50,12 @@ create table mcp_consent (
 );
 create index mcp_consent_user_idx on mcp_consent (user_id, server_id);
 
+-- Transcript sharing (P7): every conversation gets an unguessable, tokened
+-- share id at creation. GET /v1/transcripts/:share_id is a PUBLIC, read-only
+-- view keyed solely by this token — no auth, no tenant filter — so the token
+-- itself is the read capability. 16 random bytes (128 bits) hex-encoded.
+alter table conversations
+    add column share_id text not null unique
+    default encode(gen_random_bytes(16), 'hex');
+
 commit;

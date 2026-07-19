@@ -113,3 +113,18 @@ func rateLimit(class string, perMin float64, burst int) fiber.Handler {
 		return c.Next()
 	}
 }
+
+// publicRateLimit builds middleware for an UNAUTHENTICATED route (e.g. the
+// public transcript view). There is no user id to key on, so it keys by client
+// IP — the only identity available on a public path.
+func publicRateLimit(class string, perMin float64, burst int) fiber.Handler {
+	l := newLimiter(perMin, burst)
+	return func(c fiber.Ctx) error {
+		if !l.allow(c.IP(), time.Now()) {
+			return c.Status(fiber.StatusTooManyRequests).JSON(fiber.Map{
+				"error": "rate limit exceeded", "class": class,
+			})
+		}
+		return c.Next()
+	}
+}

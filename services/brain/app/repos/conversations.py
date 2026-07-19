@@ -14,6 +14,7 @@ PAGE_SIZE = 30
 class ConversationRow:
     id: str
     title: str
+    share_id: str
     created_at: datetime
     updated_at: datetime
 
@@ -22,9 +23,13 @@ def _row(r) -> ConversationRow:
     return ConversationRow(
         id=str(r["id"]),
         title=r["title"] or "",
+        share_id=r["share_id"] if "share_id" in r else "",
         created_at=r["created_at"],
         updated_at=r["updated_at"],
     )
+
+
+_COLS = "id, title, share_id, created_at, updated_at"
 
 
 async def create(user_id: str, title: str | None = None) -> ConversationRow:
@@ -33,8 +38,8 @@ async def create(user_id: str, title: str | None = None) -> ConversationRow:
         async with conn.transaction():
             await ensure_user(conn, user_id)
             r = await conn.fetchrow(
-                "insert into conversations (user_id, title) values ($1, $2) "
-                "returning id, title, created_at, updated_at",
+                f"insert into conversations (user_id, title) values ($1, $2) "
+                f"returning {_COLS}",
                 user_id, title,
             )
     return _row(r)
@@ -44,9 +49,20 @@ async def get(user_id: str, conversation_id: str) -> ConversationRow | None:
     pool = db.require()
     async with pool.acquire() as conn:
         r = await conn.fetchrow(
-            "select id, title, created_at, updated_at from conversations "
-            "where id = $1 and user_id = $2",
+            f"select {_COLS} from conversations where id = $1 and user_id = $2",
             conversation_id, user_id,
+        )
+    return _row(r) if r else None
+
+
+async def get_by_share_id(share_id: str) -> ConversationRow | None:
+    """PUBLIC lookup by tokened share id — NO tenant filter. The share id is
+    the read capability; callers must not expose any tenant-scoped mutation
+    through this path (transcripts are read-only)."""
+    pool = db.require()
+    async with pool.acquire() as conn:
+        r = await conn.fetchrow(
+            f"select {_COLS} from conversations where share_id = $1", share_id
         )
     return _row(r) if r else None
 
@@ -65,14 +81,14 @@ async def list_page(
     async with pool.acquire() as conn:
         if cursor_ts is not None:
             rows = await conn.fetch(
-                "select id, title, created_at, updated_at from conversations "
+                f"select {_COLS} from conversations "
                 "where user_id = $1 and updated_at < $2 "
                 "order by updated_at desc limit $3",
                 user_id, cursor_ts, limit + 1,
             )
         else:
             rows = await conn.fetch(
-                "select id, title, created_at, updated_at from conversations "
+                f"select {_COLS} from conversations "
                 "where user_id = $1 order by updated_at desc limit $2",
                 user_id, limit + 1,
             )
@@ -87,9 +103,8 @@ async def rename(user_id: str, conversation_id: str, title: str) -> Conversation
     pool = db.require()
     async with pool.acquire() as conn:
         r = await conn.fetchrow(
-            "update conversations set title = $3, updated_at = now() "
-            "where id = $1 and user_id = $2 "
-            "returning id, title, created_at, updated_at",
+            f"update conversations set title = $3, updated_at = now() "
+            f"where id = $1 and user_id = $2 returning {_COLS}",
             conversation_id, user_id, title,
         )
     return _row(r) if r else None

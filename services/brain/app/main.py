@@ -12,6 +12,7 @@ from fastapi import FastAPI
 
 from app.config import settings
 from app import grpc_server
+from app.db import db
 
 VERSION = "0.1.0"
 
@@ -27,10 +28,12 @@ async def lifespan(app: FastAPI):
     missing = settings.missing()
     if missing:
         log.warning("starting degraded; missing config: %s", ", ".join(missing))
+    await db.connect()  # degrades to no-pool when DATABASE_URL is absent/unreachable
     grpc_addr = os.environ.get("BRAIN_GRPC_ADDR", "127.0.0.1:9100")
     server = await grpc_server.serve(grpc_addr)
     yield
     await server.stop(grace=2.0)
+    await db.close()
 
 
 app = FastAPI(title="verity-brain", version=VERSION, docs_url=None, redoc_url=None, lifespan=lifespan)
@@ -44,4 +47,5 @@ async def healthz() -> dict:
         "service": "brain",
         "version": VERSION,
         "missing_config": missing,
+        "db": db.available,  # false = persistence RPCs answer UNAVAILABLE
     }
