@@ -1,0 +1,19 @@
+{
+  "name": "Verity",
+  "short_name": "Verity",
+  "description": "Calm, precise, trustworthy AI orchestration — chat, flows, offices, and a compute network.",
+  "id": "/",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "orientation": "any",
+  "background_color": "#F6F4EE",
+  "theme_color": "#56694B",
+  "categories": ["productivity", "utilities"],
+  "icons": [
+    { "src": "/icons/icon.svg", "type": "image/svg+xml", "sizes": "any", "purpose": "any" },
+    { "src": "/icons/icon-192.png", "type": "image/png", "sizes": "192x192", "purpose": "any" },
+    { "src": "/icons/icon-512.png", "type": "image/png", "sizes": "512x512", "purpose": "any" },
+    { "src": "/icons/maskable-512.png", "type": "image/png", "sizes": "512x512", "purpose": "maskable" }
+  ]
+}

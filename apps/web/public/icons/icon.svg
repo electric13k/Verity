@@ -1,0 +1,26 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="512" height="512" viewBox="0 0 512 512" role="img" aria-label="Verity">
+  <defs>
+    <linearGradient id="tile" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#6A7E5B"/>
+      <stop offset="0.55" stop-color="#56694B"/>
+      <stop offset="1" stop-color="#3F4F37"/>
+    </linearGradient>
+    <linearGradient id="stroke" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#FBFAF4"/>
+      <stop offset="1" stop-color="#EDE7D6"/>
+    </linearGradient>
+  </defs>
+  <!-- tile -->
+  <rect x="0" y="0" width="512" height="512" rx="112" fill="url(#tile)"/>
+  <!-- two roles converging into one answer: the V of Verity, drawn as a flow -->
+  <g fill="none" stroke="url(#stroke)" stroke-width="34" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M158 150 L256 350"/>
+    <path d="M354 150 L256 350"/>
+  </g>
+  <!-- source nodes -->
+  <circle cx="158" cy="150" r="20" fill="#EDE7D6"/>
+  <circle cx="354" cy="150" r="20" fill="#EDE7D6"/>
+  <!-- convergence node, brass -->
+  <circle cx="256" cy="350" r="30" fill="#C9AE7C"/>
+  <circle cx="256" cy="350" r="13" fill="#3F4F37"/>
+</svg>

@@ -744,6 +744,541 @@ body {
     outline-offset: 2px;
     border-radius: var(--v-radius-sm);
   }
+
+  /* ================================================================ *
+   * FLOWS — the signature power-view. A run bar hands a task to a
+   * company of roles; the stage renders each lane as it reports, beside
+   * a phase ledger (the score). Editorial, staged — not a dashboard.
+   * ================================================================ */
+  .flow { display: flex; flex-direction: column; height: 100%; min-height: 0; }
+  .flow__header {
+    display: flex;
+    align-items: flex-end;
+    justify-content: space-between;
+    gap: var(--v-space-4);
+    padding: var(--v-space-4) var(--v-space-5) var(--v-space-3);
+    padding-left: max(var(--v-space-5), env(safe-area-inset-left));
+  }
+  .flow__title { font-size: 1.375rem; line-height: 1.2; margin-top: 2px; }
+  .flow__body { flex: 1; min-height: 0; overflow-y: auto; }
+  .flow__inner {
+    max-width: 60rem;
+    margin: 0 auto;
+    padding: var(--v-space-3) var(--v-space-5) var(--v-space-6);
+    display: flex;
+    flex-direction: column;
+    gap: var(--v-space-5);
+  }
+  @media (max-width: 1023px) {
+    .flow__header { padding-left: calc(var(--v-space-6) + var(--v-space-3)); }
+  }
+
+  /* Run bar --------------------------------------------------------- */
+  .flow-run { padding: var(--v-space-4); }
+  .flow-run__grid {
+    display: grid;
+    grid-template-columns: 1fr auto;
+    gap: var(--v-space-4);
+    align-items: stretch;
+  }
+  .flow-run__input {
+    display: block;
+    width: 100%;
+    resize: none;
+    border: 0;
+    background: transparent;
+    outline: none;
+    color: var(--v-ink);
+    font-family: var(--v-font-body);
+    font-size: 1rem;
+    line-height: 1.55;
+    max-height: 220px;
+    padding: var(--v-space-1) var(--v-space-2);
+  }
+  .flow-run__input::placeholder { color: color-mix(in oklab, var(--v-ink) 40%, transparent); }
+  .flow-run__bar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    flex-wrap: wrap;
+    gap: var(--v-space-2);
+    margin-top: var(--v-space-3);
+    padding-top: var(--v-space-3);
+    border-top: 1px solid rgb(var(--hairline) / 0.16);
+  }
+  .flow-run__controls { display: flex; align-items: center; flex-wrap: wrap; gap: var(--v-space-2); }
+
+  .flow-stepper {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.2rem;
+    padding: 0.16rem 0.28rem;
+    border-radius: 999px;
+    border: 1px solid rgb(var(--hairline) / 0.28);
+    background: rgb(var(--glass-tint) / 0.42);
+    backdrop-filter: blur(8px);
+    -webkit-backdrop-filter: blur(8px);
+  }
+  .flow-stepper__btn {
+    display: inline-flex; align-items: center; justify-content: center;
+    width: 1.35rem; height: 1.35rem;
+    border: 0; border-radius: 999px; cursor: pointer;
+    background: transparent;
+    color: color-mix(in oklab, var(--v-ink) 62%, transparent);
+    transition: background-color var(--v-motion-fast) var(--v-motion-ease), color var(--v-motion-fast) var(--v-motion-ease);
+  }
+  .flow-stepper__btn:hover:not(:disabled) { background: rgb(var(--glass-tint) / 0.7); color: var(--v-ink); }
+  .flow-stepper__btn:disabled { opacity: 0.35; cursor: not-allowed; }
+  .flow-stepper__val {
+    font-family: var(--v-font-mono);
+    font-size: 0.6875rem; letter-spacing: 0.02em;
+    color: color-mix(in oklab, var(--v-ink) 82%, transparent);
+    padding: 0 0.2rem; white-space: nowrap;
+  }
+  .flow-stepper__unit { color: color-mix(in oklab, var(--v-ink) 50%, transparent); }
+
+  /* Topology glyph — the converge / diverge-converge indicator ------ */
+  .flow-topo {
+    display: flex; flex-direction: column; align-items: center; justify-content: center;
+    gap: var(--v-space-1);
+    width: 208px; margin: 0;
+    padding: var(--v-space-2);
+    border-radius: var(--v-radius-md);
+    border: 1px solid rgb(var(--hairline) / 0.16);
+    background: rgb(var(--glass-tint) / 0.28);
+    transition: opacity var(--v-motion-base) var(--v-motion-ease), border-color var(--v-motion-base) var(--v-motion-ease);
+  }
+  .flow-topo--muted { opacity: 0.55; }
+  .flow-topo svg { display: block; }
+  .flow-topo__cap {
+    font-family: var(--v-font-mono);
+    font-size: 0.625rem; letter-spacing: 0.08em; text-transform: uppercase;
+    color: color-mix(in oklab, var(--v-ink) 50%, transparent);
+  }
+  @media (max-width: 620px) {
+    .flow-run__grid { grid-template-columns: 1fr; }
+    .flow-topo { width: 100%; }
+  }
+
+  /* Stage: ledger (the score) beside the role lanes ----------------- */
+  .flow-stage {
+    display: grid;
+    grid-template-columns: 172px 1fr;
+    gap: var(--v-space-5);
+    align-items: start;
+  }
+  .flow-ledger {
+    position: sticky; top: 0;
+    display: flex; flex-direction: column; gap: var(--v-space-3);
+    padding-top: var(--v-space-1);
+  }
+  .flow-ledger__kind { display: flex; flex-direction: column; gap: 3px; }
+  .flow-ledger__kindval { font-family: var(--v-font-display); font-size: 1.0625rem; line-height: 1.15; }
+  .flow-ledger__steps { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; }
+  .flow-ledger__step {
+    position: relative;
+    display: grid;
+    grid-template-columns: 1.1rem 1fr auto;
+    align-items: center;
+    gap: 0.6ch;
+    padding: 0.5rem 0;
+    color: color-mix(in oklab, var(--v-ink) 42%, transparent);
+    transition: color var(--v-motion-base) var(--v-motion-ease);
+  }
+  /* connector line down the ledger, between the phase marks */
+  .flow-ledger__step:not(:last-child)::before {
+    content: "";
+    position: absolute;
+    left: calc(0.55rem - 0.5px);
+    top: calc(50% + 0.35rem);
+    height: calc(100% - 0.7rem);
+    width: 1.5px;
+    background: rgb(var(--hairline) / 0.22);
+  }
+  .flow-ledger__step--active,
+  .flow-ledger__step--done { color: color-mix(in oklab, var(--v-ink) 88%, transparent); }
+  .flow-ledger__label { font-size: 0.875rem; }
+  .flow-ledger__n {
+    font-family: var(--v-font-mono);
+    font-size: 0.625rem; letter-spacing: 0.06em;
+    color: color-mix(in oklab, var(--v-ink) 34%, transparent);
+  }
+  .flow-ledger__seal {
+    display: inline-flex; align-items: center; gap: 0.5ch;
+    font-family: var(--v-font-mono); font-size: 0.6875rem; letter-spacing: 0.04em;
+    color: color-mix(in oklab, var(--v-ink) 72%, transparent);
+    padding-top: var(--v-space-1);
+  }
+
+  .flow-lanes { display: flex; flex-direction: column; gap: var(--v-space-4); min-width: 0; }
+
+  /* A role lane. */
+  .lane { padding: var(--v-space-4); }
+  .lane__head {
+    display: flex; align-items: center; gap: 0.6ch;
+    margin-bottom: var(--v-space-3);
+  }
+  .lane__glyph {
+    display: inline-flex; align-items: center; justify-content: center;
+    width: 1.75rem; height: 1.75rem; flex: none;
+    border-radius: var(--v-radius-sm);
+    background: rgb(var(--glass-tint) / 0.5);
+    border: 1px solid rgb(var(--hairline) / 0.2);
+    color: var(--v-matcha);
+  }
+  .lane__role { font-family: var(--v-font-display); font-size: 1rem; letter-spacing: -0.01em; }
+  .lane__caption { margin-left: 0.2rem; }
+  .lane__body { min-width: 0; }
+
+  .lane-band { display: flex; flex-direction: column; gap: var(--v-space-2); }
+  .lane-band__label { padding-left: 0.1rem; }
+  .worker-band {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+    gap: var(--v-space-3);
+  }
+  .worker-band[data-count="1"] { grid-template-columns: 1fr; }
+  .worker-card { padding: var(--v-space-3) var(--v-space-4); }
+  .worker-card .lane__head { margin-bottom: var(--v-space-2); }
+  .worker-card .lane__role { font-size: 0.9375rem; }
+
+  /* Plan as an ordered, numbered set of steps (a real sequence). */
+  .plan-steps { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: var(--v-space-2); }
+  .plan-steps li { display: flex; gap: 0.7ch; font-size: 0.9375rem; line-height: 1.5; }
+  .plan-steps__n {
+    display: inline-flex; align-items: center; justify-content: center;
+    flex: none; width: 1.4rem; height: 1.4rem; margin-top: 1px;
+    border-radius: 999px;
+    font-family: var(--v-font-mono); font-size: 0.6875rem;
+    color: var(--v-matcha);
+    background: color-mix(in oklab, var(--v-matcha) 12%, rgb(var(--glass-tint) / 0.5));
+    border: 1px solid rgb(var(--hairline) / 0.24);
+  }
+
+  /* Lane status dots. */
+  .lane-dot { width: 0.5rem; height: 0.5rem; border-radius: 999px; flex: none; margin-left: auto; }
+  .lane-dot--pending { background: transparent; border: 1.5px solid color-mix(in oklab, var(--v-ink) 26%, transparent); }
+  .lane-dot--active { background: var(--v-matcha); box-shadow: 0 0 0 0 color-mix(in oklab, var(--v-matcha) 60%, transparent); animation: v-pulse 1.6s var(--v-motion-ease) infinite; }
+  .lane-dot--done { background: var(--v-matcha); }
+  .lane-dot--error { background: var(--v-oxblood); }
+  /* the ledger reuses the dot but keeps it left-aligned in its mark cell */
+  .flow-ledger__mark .lane-dot { margin-left: 0; }
+
+  .lane-idle {
+    font-size: 0.8125rem; font-style: italic;
+    color: color-mix(in oklab, var(--v-ink) 42%, transparent);
+  }
+
+  .flow-error { margin-top: var(--v-space-1); }
+
+  @media (max-width: 860px) {
+    .flow-stage { grid-template-columns: 1fr; gap: var(--v-space-4); }
+    .flow-ledger {
+      position: static;
+      flex-direction: row; flex-wrap: wrap; align-items: center;
+      gap: var(--v-space-3) var(--v-space-4);
+      padding-bottom: var(--v-space-2);
+      border-bottom: 1px solid rgb(var(--hairline) / 0.16);
+    }
+    .flow-ledger__steps { flex-direction: row; flex-wrap: wrap; gap: var(--v-space-2) var(--v-space-4); }
+    .flow-ledger__step { padding: 0; }
+    .flow-ledger__step:not(:last-child)::before { display: none; }
+    .flow-ledger__n { display: none; }
+  }
+}
+
+@keyframes v-pulse {
+  0% { box-shadow: 0 0 0 0 color-mix(in oklab, var(--v-matcha) 55%, transparent); }
+  70% { box-shadow: 0 0 0 6px color-mix(in oklab, var(--v-matcha) 0%, transparent); }
+  100% { box-shadow: 0 0 0 0 color-mix(in oklab, var(--v-matcha) 0%, transparent); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .lane-dot--active { animation: none; }
+}
+
+@layer components {
+  /* ================================================================ *
+   * Shared form primitives — used by Offices, Compute, and Settings.
+   * A labelled stack (eyebrow over a field) and a wrapping chip row.
+   * ================================================================ */
+  .field-row { display: flex; flex-direction: column; gap: var(--v-space-2); }
+  .field-row + .field-row { margin-top: var(--v-space-4); }
+  .field-hint {
+    font-family: var(--v-font-mono); font-size: 0.6875rem; letter-spacing: 0.02em;
+    color: color-mix(in oklab, var(--v-ink) 50%, transparent);
+  }
+  .chip-row { display: flex; flex-wrap: wrap; gap: var(--v-space-2); }
+
+  /* ================================================================ *
+   * OFFICES — list, create form, and the run checkpoint timeline.
+   * ================================================================ */
+  .office-bar {
+    display: flex; align-items: center; justify-content: space-between;
+    gap: var(--v-space-4); flex-wrap: wrap;
+  }
+  .office-bar__lede {
+    font-size: 0.9375rem; line-height: 1.5; max-width: 46ch;
+    color: color-mix(in oklab, var(--v-ink) 66%, transparent);
+  }
+  .office-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+    gap: var(--v-space-4);
+  }
+  .office-card { display: flex; flex-direction: column; gap: var(--v-space-3); padding: var(--v-space-4); }
+  .office-card__top { display: flex; align-items: flex-start; justify-content: space-between; gap: var(--v-space-3); }
+  .office-card__name { font-size: 1.0625rem; line-height: 1.2; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .office-card__sched {
+    display: inline-flex; align-items: center; gap: 0.4ch; margin-top: 3px;
+    font-family: var(--v-font-mono); font-size: 0.6875rem; letter-spacing: 0.02em;
+    color: color-mix(in oklab, var(--v-ink) 54%, transparent);
+  }
+  .office-card__brief {
+    font-size: 0.875rem; line-height: 1.55; flex: 1;
+    color: color-mix(in oklab, var(--v-ink) 74%, transparent);
+    display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden;
+  }
+  .office-card__foot { display: flex; align-items: center; justify-content: space-between; gap: var(--v-space-2); }
+  .office-card__actions { display: flex; align-items: center; gap: var(--v-space-2); }
+  .office-card__del {
+    display: inline-flex; flex: none; border: 0; background: transparent; cursor: pointer;
+    padding: 4px; border-radius: var(--v-radius-sm);
+    color: color-mix(in oklab, var(--v-ink) 44%, transparent);
+    transition: color var(--v-motion-fast) var(--v-motion-ease), background-color var(--v-motion-fast) var(--v-motion-ease);
+  }
+  .office-card__del:hover { color: var(--v-oxblood); background: color-mix(in oklab, var(--v-oxblood) 10%, transparent); }
+
+  .office-empty { display: flex; flex-direction: column; align-items: center; text-align: center; padding: var(--v-space-6) var(--v-space-5); }
+  .office-empty__title { font-size: 1.25rem; margin: 0; }
+  .office-empty__sub {
+    font-size: 0.9375rem; line-height: 1.55; margin-top: var(--v-space-2); max-width: 40ch;
+    color: color-mix(in oklab, var(--v-ink) 62%, transparent);
+  }
+
+  .office-form__split { display: grid; grid-template-columns: 1fr auto; gap: var(--v-space-4); align-items: start; margin-top: var(--v-space-4); }
+  .office-form__actions { display: flex; justify-content: flex-end; gap: var(--v-space-2); margin-top: var(--v-space-5); }
+  @media (max-width: 520px) { .office-form__split { grid-template-columns: 1fr; } }
+
+  /* Run detail — the STATE checkpoint timeline. */
+  .run-detail { display: flex; flex-direction: column; gap: var(--v-space-4); align-items: flex-start; }
+  .run-detail__head { display: flex; align-items: flex-start; justify-content: space-between; gap: var(--v-space-4); width: 100%; }
+  .run-detail__title { font-size: 1.375rem; line-height: 1.2; margin: 2px 0 0; }
+  .run-detail__started {
+    display: block; margin-top: 3px;
+    font-family: var(--v-font-mono); font-size: 0.6875rem;
+    color: color-mix(in oklab, var(--v-ink) 50%, transparent);
+  }
+  .run-detail__panel { width: 100%; padding: var(--v-space-5); }
+
+  .ckpt-list { list-style: none; margin: 0; padding: 0; }
+  .ckpt { position: relative; display: grid; grid-template-columns: 1.75rem 1fr; gap: var(--v-space-3); padding-bottom: var(--v-space-4); }
+  .ckpt__rail { position: relative; display: flex; justify-content: center; }
+  /* connector line between checkpoint nodes */
+  .ckpt:not(.ckpt--last) .ckpt__rail::after {
+    content: ""; position: absolute; top: 1.75rem; bottom: -0.5rem; left: 50%;
+    width: 1.5px; transform: translateX(-50%);
+    background: rgb(var(--hairline) / 0.24);
+  }
+  .ckpt__node {
+    display: inline-flex; align-items: center; justify-content: center;
+    width: 1.75rem; height: 1.75rem; flex: none;
+    border-radius: 999px;
+    background: rgb(var(--glass-tint) / 0.7);
+    border: 1px solid rgb(var(--hairline) / 0.34);
+    color: var(--v-matcha);
+  }
+  .ckpt__body { min-width: 0; padding-top: 2px; }
+  .ckpt__head { display: flex; align-items: baseline; gap: var(--v-space-2); margin-bottom: 4px; }
+  .ckpt__role { font-family: var(--v-font-display); font-size: 0.9375rem; }
+  .ckpt__phase { font-size: 0.5625rem; }
+  .ckpt__time {
+    margin-left: auto; flex: none;
+    font-family: var(--v-font-mono); font-size: 0.625rem;
+    color: color-mix(in oklab, var(--v-ink) 46%, transparent);
+  }
+  .ckpt__prose { font-size: 0.875rem; }
+  .ckpt__seal { font-size: 0.875rem; color: color-mix(in oklab, var(--v-ink) 60%, transparent); margin: 0; }
+
+  /* ================================================================ *
+   * COMPUTE — network stats, live job submit, consensus explainer.
+   * ================================================================ */
+  .compute { gap: var(--v-space-4); }
+  .compute-stats {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: var(--v-space-3);
+  }
+  .stat-tile { display: flex; flex-direction: column; gap: 2px; padding: var(--v-space-4); }
+  .stat-tile__icon { color: var(--v-matcha); margin-bottom: var(--v-space-1); }
+  .stat-tile__value { font-size: 1.75rem; line-height: 1; letter-spacing: -0.01em; font-variant-numeric: tabular-nums; }
+  .stat-tile__label { margin-top: var(--v-space-1); font-size: 0.5625rem; }
+  @media (max-width: 720px) { .compute-stats { grid-template-columns: repeat(2, 1fr); } }
+
+  .compute-submit { padding: var(--v-space-4); }
+  .compute-receipt {
+    display: flex; align-items: flex-start; gap: 0.6ch;
+    margin-top: var(--v-space-4); padding-top: var(--v-space-3);
+    border-top: 1px solid rgb(var(--hairline) / 0.16);
+  }
+  .compute-receipt__title { font-size: 0.9375rem; }
+  .compute-receipt__ids { display: flex; flex-wrap: wrap; gap: var(--v-space-3); margin-top: 4px; }
+  .compute-receipt__ids span {
+    font-family: var(--v-font-mono); font-size: 0.6875rem;
+    color: color-mix(in oklab, var(--v-ink) 55%, transparent);
+  }
+  .compute-receipt__ids code { color: var(--v-ink); }
+
+  .compute-explain {
+    display: grid; grid-template-columns: 1.3fr 1fr; gap: var(--v-space-5);
+    align-items: center; padding: var(--v-space-5);
+  }
+  .compute-explain__title { font-size: 1.375rem; line-height: 1.15; margin: var(--v-space-2) 0 0; }
+  .compute-explain__body {
+    font-size: 0.9375rem; line-height: 1.6; margin: var(--v-space-3) 0 0;
+    color: color-mix(in oklab, var(--v-ink) 72%, transparent);
+  }
+  .compute-explain__list { list-style: none; margin: var(--v-space-4) 0 0; padding: 0; display: flex; flex-direction: column; gap: var(--v-space-2); }
+  .compute-explain__list li {
+    position: relative; padding-left: var(--v-space-4);
+    font-size: 0.875rem; line-height: 1.5;
+    color: color-mix(in oklab, var(--v-ink) 74%, transparent);
+  }
+  .compute-explain__list li::before {
+    content: ""; position: absolute; left: 0; top: 0.55em;
+    width: 6px; height: 6px; border-radius: 999px; background: var(--v-brass);
+  }
+  .compute-explain__figure {
+    padding: var(--v-space-4);
+    border-radius: var(--v-radius-md);
+    border: 1px solid rgb(var(--hairline) / 0.16);
+    background: rgb(var(--glass-tint) / 0.24);
+  }
+  .consensus-diagram__t {
+    font-family: var(--v-font-mono); font-size: 8px; letter-spacing: 0.06em; text-transform: uppercase;
+    fill: color-mix(in oklab, var(--v-ink) 48%, transparent);
+  }
+  @media (max-width: 720px) {
+    .compute-explain { grid-template-columns: 1fr; }
+    .compute-explain__figure { max-width: 320px; }
+  }
+
+  /* ================================================================ *
+   * SETTINGS — provider keys. Write-only key entry, configured state.
+   * ================================================================ */
+  .settings { gap: var(--v-space-5); max-width: 46rem; }
+  .settings-note {
+    display: flex; align-items: flex-start; gap: 0.7ch;
+    padding: var(--v-space-4);
+  }
+  .settings-note p {
+    margin: 0; font-size: 0.875rem; line-height: 1.55;
+    color: color-mix(in oklab, var(--v-ink) 70%, transparent);
+  }
+  .settings-section { display: flex; flex-direction: column; gap: var(--v-space-3); }
+  .key-list { display: flex; flex-direction: column; gap: var(--v-space-3); }
+
+  .key-row {
+    display: flex; flex-direction: column; gap: var(--v-space-3);
+    padding: var(--v-space-4);
+    border-radius: var(--v-radius-lg);
+    border: 1px solid rgb(var(--hairline) / 0.18);
+    background: rgb(var(--glass-tint) / 0.3);
+  }
+  .key-row__head { display: flex; align-items: center; justify-content: space-between; gap: var(--v-space-3); }
+  .key-row__id { display: flex; align-items: center; gap: var(--v-space-3); flex-wrap: wrap; min-width: 0; }
+  .key-row__name { font-family: var(--v-font-display); font-size: 1rem; }
+  .key-row__actions { display: flex; align-items: center; gap: var(--v-space-2); flex: none; }
+  .key-row__note {
+    margin: 0; font-size: 0.8125rem; line-height: 1.5;
+    color: color-mix(in oklab, var(--v-ink) 54%, transparent);
+  }
+  .key-row__entry { display: flex; align-items: center; gap: var(--v-space-2); flex-wrap: wrap; }
+  .key-row__field { position: relative; flex: 1; min-width: 220px; }
+  .key-row__field .gfield { padding-right: 2.4rem; font-family: var(--v-font-mono); font-size: 0.8125rem; }
+  .key-row__reveal {
+    position: absolute; right: 0.5rem; top: 50%; transform: translateY(-50%);
+    display: inline-flex; border: 0; background: transparent; cursor: pointer; padding: 4px;
+    color: color-mix(in oklab, var(--v-ink) 50%, transparent);
+  }
+  .key-row__reveal:hover { color: var(--v-ink); }
+  .key-row__save { display: flex; align-items: center; gap: var(--v-space-2); flex: none; }
+
+  /* ================================================================ *
+   * TRANSCRIPT — public read-only share. Editorial document, print-clean.
+   * ================================================================ */
+  .t-page { height: 100dvh; overflow-y: auto; padding: var(--v-space-5) var(--v-space-4); }
+  .t-doc {
+    max-width: 44rem; margin: 0 auto;
+    padding: var(--v-space-6) clamp(var(--v-space-4), 5vw, var(--v-space-6));
+  }
+  .t-doc--missing { text-align: center; padding-top: 18vh; }
+  .t-missing__title { font-size: 1.75rem; line-height: 1.15; margin: var(--v-space-4) 0 0; }
+  .t-missing__sub { color: color-mix(in oklab, var(--v-ink) 60%, transparent); margin-top: var(--v-space-3); }
+
+  .t-doc__head {
+    display: flex; align-items: center; justify-content: space-between; gap: var(--v-space-3);
+    padding-bottom: var(--v-space-4);
+    border-bottom: 1px solid rgb(var(--hairline) / 0.28);
+  }
+  .t-doc__brand { display: flex; align-items: baseline; gap: 0.6ch; }
+  .t-doc__title {
+    font-size: clamp(1.75rem, 4vw, 2.5rem); line-height: 1.12; letter-spacing: -0.02em;
+    margin: var(--v-space-5) 0 0; max-width: 22ch;
+  }
+  .t-doc__meta {
+    display: flex; gap: var(--v-space-4); margin-top: var(--v-space-3);
+    font-family: var(--v-font-mono); font-size: 0.6875rem; letter-spacing: 0.04em;
+    color: color-mix(in oklab, var(--v-ink) 52%, transparent);
+  }
+  .t-doc__meta span { display: inline-flex; align-items: center; gap: 0.4ch; }
+
+  .t-thread { margin-top: var(--v-space-6); display: flex; flex-direction: column; gap: var(--v-space-6); }
+  .t-turn { display: flex; flex-direction: column; gap: var(--v-space-2); }
+  .t-turn__who { color: color-mix(in oklab, var(--v-ink) 46%, transparent); }
+  .t-turn--assistant .t-turn__who { color: var(--v-matcha); }
+  .t-turn__user {
+    font-size: 1.0625rem; line-height: 1.55; font-family: var(--v-font-display);
+    letter-spacing: -0.01em; white-space: pre-wrap;
+  }
+  .t-doc__foot { margin-top: var(--v-space-6); padding-top: var(--v-space-4); border-top: 1px solid rgb(var(--hairline) / 0.28); }
+}
+
+@layer components {
+  /* Composer attachments — drop target + file-chip lifecycle. */
+  .composer--drop { outline: 1.5px dashed rgb(var(--hairline) / 0.6); outline-offset: -4px; }
+  .attach-row { display: flex; flex-wrap: wrap; gap: var(--v-space-2); padding: 0 var(--v-space-2) var(--v-space-2); }
+  .attach-chip {
+    display: inline-flex; align-items: center; gap: 0.5ch;
+    max-width: 100%;
+    padding: 0.3rem 0.3rem 0.3rem 0.6rem;
+    border-radius: 999px;
+    border: 1px solid rgb(var(--hairline) / 0.28);
+    background: rgb(var(--glass-tint) / 0.5);
+    font-family: var(--v-font-mono); font-size: 0.6875rem;
+  }
+  .attach-chip--parsed { border-color: color-mix(in oklab, var(--v-matcha) 40%, transparent); }
+  .attach-chip--error { border-color: color-mix(in oklab, var(--v-oxblood) 45%, transparent); color: var(--v-oxblood); }
+  .attach-chip__name { max-width: 16ch; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .attach-chip__meta { color: color-mix(in oklab, var(--v-ink) 48%, transparent); display: inline-flex; align-items: center; }
+  .attach-chip--error .attach-chip__meta { color: var(--v-oxblood); }
+  .attach-chip__x {
+    display: inline-flex; align-items: center; justify-content: center;
+    width: 1.05rem; height: 1.05rem; flex: none;
+    border: 0; border-radius: 999px; cursor: pointer; font-size: 0.9rem; line-height: 1;
+    background: transparent; color: color-mix(in oklab, var(--v-ink) 50%, transparent);
+    transition: background-color var(--v-motion-fast) var(--v-motion-ease), color var(--v-motion-fast) var(--v-motion-ease);
+  }
+  .attach-chip__x:hover { background: rgb(var(--glass-tint) / 0.8); color: var(--v-ink); }
+}
+
+/* Print — drop the chrome, lay the thread on white. */
+@media print {
+  .mesh, .t-doc__print { display: none !important; }
+  html, body { height: auto !important; overflow: visible !important; background: #fff !important; color: #111 !important; }
+  .t-page { height: auto !important; overflow: visible !important; padding: 0 !important; }
+  .t-doc { max-width: none; padding: 0.5in; }
+  .prose-verity a { color: #111; text-decoration: underline; }
+  .t-turn { break-inside: avoid; }
 }
 
 /* Custom scrollbars — thin, warm, unobtrusive. */

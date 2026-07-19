@@ -94,6 +94,10 @@ function WorkerCard({ lane }: { lane: WorkerLane }) {
           <div className="msg__error"><WarningCircle size={15} weight="fill" />{lane.content || "This worker failed."}</div>
         ) : lane.content ? (
           <Prose content={lane.content} />
+        ) : lane.status === "done" ? (
+          // Finished with no output: the conductor assigned fewer subtasks than
+          // workers requested, so this one was never engaged.
+          <span className="lane-idle">Stood down — no subtask assigned.</span>
         ) : (
           <ThinkingRow />
         )}

@@ -6,7 +6,7 @@ import "./globals.css";
 
 import { ThemeProvider } from "@/components/shell/ThemeProvider";
 import { AmbientMesh } from "@/components/background/AmbientMesh";
-import { PWARegister } from "@/components/shell/PWARegister";
+import { PWARegister } from "@/components/pwa/PWARegister";
 
 export const metadata: Metadata = {
   title: "Verity",

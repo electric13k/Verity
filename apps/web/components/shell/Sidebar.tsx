@@ -10,15 +10,17 @@ import {
   Cpu,
   NotePencil,
   TrashSimple,
+  SlidersHorizontal,
 } from "@phosphor-icons/react";
 import { useApp } from "@/lib/store";
 import { ThemeToggle } from "./ThemeToggle";
 
 const NAV = [
-  { href: "/", label: "Chat", Icon: ChatTeardropText, soon: false },
-  { href: "/flows", label: "Flows", Icon: FlowArrow, soon: true },
-  { href: "/offices", label: "Offices", Icon: Buildings, soon: true },
-  { href: "/compute", label: "Compute", Icon: Cpu, soon: true },
+  { href: "/", label: "Chat", Icon: ChatTeardropText },
+  { href: "/flows", label: "Flows", Icon: FlowArrow },
+  { href: "/offices", label: "Offices", Icon: Buildings },
+  { href: "/compute", label: "Compute", Icon: Cpu },
+  { href: "/settings", label: "Settings", Icon: SlidersHorizontal },
 ];
 
 function timeAgo(iso: string): string {
@@ -75,7 +77,7 @@ export function Sidebar({ onNavigate }: { onNavigate?: () => void }) {
 
       {/* Primary navigation. */}
       <nav className="flex flex-col gap-1" aria-label="Primary">
-        {NAV.map(({ href, label, Icon, soon }) => {
+        {NAV.map(({ href, label, Icon }) => {
           const active = href === "/" ? pathname === "/" : pathname.startsWith(href);
           return (
             <Link
@@ -87,7 +89,6 @@ export function Sidebar({ onNavigate }: { onNavigate?: () => void }) {
             >
               <Icon size={18} weight={active ? "fill" : "regular"} />
               {label}
-              {soon && <span className="nav-item__soon">Soon</span>}
             </Link>
           );
         })}
