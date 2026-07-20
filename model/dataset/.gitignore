@@ -1,0 +1,8 @@
+# The assembled SFT dataset is a BUILD ARTIFACT, not a source.
+# It is fully reproducible from the committed corpus/ sources plus
+# scripts/build_dataset.py, and is large (~1.2 MiB), so it is not committed.
+#
+#   services/brain/.venv/bin/python model/scripts/build_dataset.py
+#
+# The corpus SOURCES under model/corpus/ ARE committed and are the ground truth.
+verity_sft.jsonl
