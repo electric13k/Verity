@@ -197,7 +197,7 @@ export function FlowsView() {
           <span className="eyebrow">Flows</span>
           <h1 className="flow__title font-display">A company of roles, one task.</h1>
         </div>
-        <span className="chat__note" title="Flow streaming is live against the gateway. Provider list and history are the in-memory mock (API_SURFACE: planned).">
+        <span className="chat__note" title="Flow streaming is live against the gateway — a conductor plans, workers run in parallel, an inspector reviews, and the work converges.">
           <Info size={13} />
           Live SSE
         </span>

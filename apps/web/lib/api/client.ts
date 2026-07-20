@@ -1,35 +1,34 @@
-// Typed gateway client. Chat + flows are live SSE against the Go gateway;
-// everything the API surface marks "planned" is delegated to the mock adapter
-// behind the same typed surface, so callers never branch on live-vs-mock.
+// Typed gateway client. Chat / regenerate / edit / flows / compute are live SSE
+// (or request/response) against the Go gateway. The routes docs/API_SURFACE.md
+// marks "planned" are served through the PlatformApi seam (`api`), which points
+// at the live gateway adapter by default and the in-memory mock only when
+// NEXT_PUBLIC_VERITY_MOCK=1 — chosen ONCE here so callers never branch.
 
-import { apiUrl } from "./config";
+import { apiUrl, IS_MOCK } from "./config";
 import { readSSE } from "./sse";
 import { mock } from "./mock";
-import type { ChatRequest, ChatStreamHandlers } from "./types";
+import { live } from "./live";
+import type { ChatRequest, ChatStreamHandlers, PlatformApi } from "./types";
 
 export class GatewayError extends Error {}
 
-/**
- * POST /v1/chat — live SSE. Returns once the stream ends (done/error) or the
- * signal aborts. Stop = abort the signal; the gateway cancels upstream.
- */
-export async function chatStream(
-  req: ChatRequest,
+// --- shared SSE tail for chat / regenerate / edit --------------------------
+// All three brain streams share one frame vocabulary: a leading `meta`
+// {conversation_id, message_id, title?}, then delta / usage / confidence, then
+// `done` (or `error`). One reader consumes them all.
+async function runChatStream(
+  method: "POST" | "PATCH",
+  path: string,
+  body: unknown,
   handlers: ChatStreamHandlers,
   signal?: AbortSignal,
 ): Promise<void> {
   let res: Response;
   try {
-    res = await fetch(apiUrl("/v1/chat"), {
-      method: "POST",
+    res = await fetch(apiUrl(path), {
+      method,
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        // Only fields the gateway accepts (strict decode rejects unknowns).
-        ...(req.conversation_id ? { conversation_id: req.conversation_id } : {}),
-        message: req.message,
-        ...(req.model ? { model: req.model } : {}),
-        use_memory: !!req.use_memory,
-      }),
+      body: JSON.stringify(body),
       signal,
     });
   } catch (e) {
@@ -42,8 +41,8 @@ export async function chatStream(
   if (!res.ok) {
     let msg = `Gateway returned ${res.status}`;
     try {
-      const body = (await res.json()) as { error?: string; detail?: string };
-      if (body.error) msg = body.error;
+      const errBody = (await res.json()) as { error?: string; detail?: string };
+      if (errBody.error) msg = errBody.error;
     } catch {
       /* keep status message */
     }
@@ -56,6 +55,13 @@ export async function chatStream(
     await readSSE(res, ({ event, data }) => {
       const d = (data ?? {}) as Record<string, unknown>;
       switch (event) {
+        case "meta":
+          handlers.onMeta?.({
+            conversation_id: typeof d.conversation_id === "string" ? d.conversation_id : "",
+            message_id: typeof d.message_id === "string" ? d.message_id : "",
+            title: typeof d.title === "string" && d.title ? d.title : undefined,
+          });
+          break;
         case "delta":
           if (typeof d.text === "string") handlers.onDelta?.(d.text);
           break;
@@ -90,35 +96,67 @@ export async function chatStream(
   handlers.onDone?.();
 }
 
-// Planned routes — typed passthrough to the mock adapter (flip to live later).
-export const api = {
-  me: mock.me,
-  listConversations: mock.listConversations,
-  getConversation: mock.getConversation,
-  createConversation: mock.createConversation,
-  renameConversation: mock.renameConversation,
-  deleteConversation: mock.deleteConversation,
-  saveMessages: mock.saveMessages,
-  branch: mock.branch,
-  // offices
-  listOffices: mock.listOffices,
-  createOffice: mock.createOffice,
-  deleteOffice: mock.deleteOffice,
-  runOffice: mock.runOffice,
-  getOfficeRun: mock.getOfficeRun,
-  // provider keys
-  getProviderKeys: mock.getProviderKeys,
-  putProviderKey: mock.putProviderKey,
-  deleteProviderKey: mock.deleteProviderKey,
-  // upload
-  upload: mock.upload,
-  // transcripts
-  getTranscript: mock.getTranscript,
-  transcriptShareIds: mock.transcriptShareIds,
-  // compute
-  computeStats: mock.computeStats,
-};
+/**
+ * POST /v1/chat — live SSE. The first frame is `meta` (new conversations
+ * surface their id + auto-name here); then deltas / usage / confidence; then
+ * done. Stop = abort the signal; the gateway cancels upstream.
+ */
+export async function chatStream(
+  req: ChatRequest,
+  handlers: ChatStreamHandlers,
+  signal?: AbortSignal,
+): Promise<void> {
+  // Only fields the gateway accepts (strict decode rejects unknowns).
+  const body: Record<string, unknown> = {
+    ...(req.conversation_id ? { conversation_id: req.conversation_id } : {}),
+    message: req.message,
+    ...(req.model ? { model: req.model } : {}),
+    use_memory: !!req.use_memory,
+    ...(req.files && req.files.length ? { files: req.files } : {}),
+  };
+  return runChatStream("POST", "/v1/chat", body, handlers, signal);
+}
 
-// Live routes exported at the top level (SSE / request-response, no mock).
+/**
+ * POST /v1/messages/:id/regenerate — live SSE. Drops the assistant turn (and
+ * anything after) and streams a fresh one. Same events as chat.
+ */
+export async function regenerateStream(
+  messageId: string,
+  opts: { model?: string; memory?: boolean },
+  handlers: ChatStreamHandlers,
+  signal?: AbortSignal,
+): Promise<void> {
+  const body: Record<string, unknown> = {
+    ...(opts.model ? { model: opts.model } : {}),
+    memory: !!opts.memory,
+  };
+  return runChatStream("POST", `/v1/messages/${encodeURIComponent(messageId)}/regenerate`, body, handlers, signal);
+}
+
+/**
+ * PATCH /v1/messages/:id — live SSE. Edits a user message, truncates everything
+ * below it, and restreams the assistant reply. Same events as chat.
+ */
+export async function editMessageStream(
+  messageId: string,
+  content: string,
+  opts: { model?: string; memory?: boolean },
+  handlers: ChatStreamHandlers,
+  signal?: AbortSignal,
+): Promise<void> {
+  const body: Record<string, unknown> = {
+    content,
+    ...(opts.model ? { model: opts.model } : {}),
+    memory: !!opts.memory,
+  };
+  return runChatStream("PATCH", `/v1/messages/${encodeURIComponent(messageId)}`, body, handlers, signal);
+}
+
+// Planned routes — one adapter, chosen once. Live by default; mock is the
+// explicit dev fallback (NEXT_PUBLIC_VERITY_MOCK=1). Callers never branch.
+export const api: PlatformApi = IS_MOCK ? mock : live;
+
+// Live routes exported at the top level (SSE / request-response, no adapter).
 export { flowStream } from "./flows";
 export { submitComputeJob } from "./compute";

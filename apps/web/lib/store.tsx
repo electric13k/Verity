@@ -1,8 +1,11 @@
 "use client";
 
 // App store: conversations + the chat engine. One context so the sidebar,
-// composer, and message list stay in sync. Streaming is live against the
-// gateway; persistence/history is the mock adapter (see lib/api).
+// composer, and message list stay in sync. Chat / regenerate / edit stream live
+// against the gateway; persistence/history is the platform adapter (lib/api),
+// live by default. New conversations surface their real id + auto-name from the
+// stream's `meta` frame with no reload; after each turn settles we reconcile
+// with server truth so real message ids back edit / regenerate / branch.
 
 import {
   createContext,
@@ -13,11 +16,18 @@ import {
   useRef,
   useState,
 } from "react";
-import { api, chatStream } from "./api/client";
-import { MODEL_CATALOG, MOCK_NOTICE } from "./api/mock";
+import {
+  api,
+  chatStream,
+  editMessageStream,
+  regenerateStream,
+} from "./api/client";
+import { PLATFORM_NOTICE } from "./api/config";
+import { MODEL_CATALOG } from "./api/mock";
 import {
   bandForScore,
   type BranchKind,
+  type ChatStreamHandlers,
   type Conversation,
   type Me,
   type Message,
@@ -26,12 +36,6 @@ import {
 
 const DEFAULT_SELECTOR = "echo:echo";
 const now = () => new Date().toISOString();
-
-function autoTitle(text: string): string {
-  const clean = text.replace(/\s+/g, " ").trim();
-  const words = clean.split(" ").slice(0, 7).join(" ");
-  return words.length < clean.length ? `${words}…` : words || "New conversation";
-}
 
 interface AppStore {
   mockNotice: string;
@@ -52,7 +56,7 @@ interface AppStore {
   renameConversation: (id: string, title: string) => Promise<void>;
   deleteConversation: (id: string) => Promise<void>;
 
-  send: (text: string) => Promise<void>;
+  send: (text: string, fileIds?: string[]) => Promise<void>;
   stop: () => void;
   regenerate: (assistantId: string) => Promise<void>;
   editUserMessage: (id: string, content: string) => Promise<void>;
@@ -74,7 +78,12 @@ export function AppProviders({ children }: { children: React.ReactNode }) {
   const messagesRef = useRef<Message[]>([]);
   messagesRef.current = messages;
 
+  // currentId inside async closures.
+  const currentIdRef = useRef<string | null>(null);
+  currentIdRef.current = currentId;
+
   useEffect(() => {
+    // Both degrade to safe defaults if the gateway/DB is down (never blank).
     api.me().then(setMe);
     api.listConversations().then(setConversations);
   }, []);
@@ -87,18 +96,51 @@ export function AppProviders({ children }: { children: React.ReactNode }) {
     setMessages((prev) => prev.map((m) => (m.id === id ? { ...m, ...patch } : m)));
   }, []);
 
-  // Runs a live chat stream that appends into the assistant message `asstId`.
-  const runStream = useCallback(
-    async (text: string, asstId: string) => {
+  // Shared streaming tail for chat / regenerate / edit. `runFn` performs the
+  // live SSE call; the assistant reply accumulates into `asstId`. The `meta`
+  // frame surfaces a new conversation's id + auto-name and the real assistant
+  // message id; on completion we reconcile the thread with server truth.
+  const consumeStream = useCallback(
+    async (
+      runFn: (handlers: ChatStreamHandlers, signal: AbortSignal) => Promise<void>,
+      asstId: string,
+    ) => {
       setStreaming(true);
       const ctrl = new AbortController();
       abortRef.current = ctrl;
       let acc = "";
       let pendingConf: { score: number; rationale?: string } | null = null;
 
-      await chatStream(
-        { message: text, model: selector, use_memory: useMemory },
+      await runFn(
         {
+          onMeta: (m) => {
+            if (m.conversation_id) {
+              if (!currentIdRef.current) {
+                // New conversation: adopt its real id + auto-name, no reload.
+                currentIdRef.current = m.conversation_id;
+                setCurrentId(m.conversation_id);
+                setConversations((prev) => [
+                  { id: m.conversation_id, title: m.title || "New conversation", updated_at: now() },
+                  ...prev.filter((c) => c.id !== m.conversation_id),
+                ]);
+              } else if (m.title) {
+                const title = m.title;
+                setConversations((prev) =>
+                  prev.map((c) =>
+                    c.id === currentIdRef.current ? { ...c, title, updated_at: now() } : c,
+                  ),
+                );
+              }
+            }
+            // Adopt the real assistant id now. `meta` precedes every delta, so
+            // the bubble is still empty and re-keying is invisible — and it
+            // means the refetch on done won't remount this message.
+            if (m.message_id) {
+              const realId = m.message_id;
+              setMessages((prev) => prev.map((x) => (x.id === asstId ? { ...x, id: realId } : x)));
+              asstId = realId;
+            }
+          },
           onDelta: (t) => {
             acc += t;
             patchMessage(asstId, { content: acc });
@@ -106,15 +148,14 @@ export function AppProviders({ children }: { children: React.ReactNode }) {
           onConfidence: (c) => {
             pendingConf = c;
           },
-          onError: (msg) => patchMessage(asstId, { error: msg }),
+          onError: (msg) => patchMessage(asstId, { error: msg, streaming: false }),
           onDone: () => {},
         },
         ctrl.signal,
       );
 
-      // `pendingConf` is only ever assigned inside the stream callback above;
-      // TS can't see that across the closure, so read it through a typed local
-      // (otherwise it narrows to `never` here).
+      // `pendingConf` is only assigned inside the stream callback; read it
+      // through a typed local so TS doesn't narrow it to `never` here.
       const conf = pendingConf as { score: number; rationale?: string } | null;
       patchMessage(asstId, {
         streaming: false,
@@ -131,42 +172,31 @@ export function AppProviders({ children }: { children: React.ReactNode }) {
       setStreaming(false);
       abortRef.current = null;
 
-      // Persist the settled thread (and auto-name a fresh conversation).
+      // Reconcile with server truth: real ids (so edit/branch/regenerate work)
+      // and persisted confidence. Only the newest user bubble re-keys; prior
+      // messages keep their ids, so there is no thread-wide re-animation.
       const cid = currentIdRef.current;
       if (cid) {
-        const settled = messagesRef.current;
-        const conv = conversations.find((c) => c.id === cid);
-        const firstUser = settled.find((m) => m.role === "user");
-        const title =
-          conv && (conv.title === "New conversation" || !conv.title) && firstUser
-            ? autoTitle(firstUser.content)
-            : undefined;
-        await api.saveMessages(cid, settled, title);
+        const detail = await api.getConversation(cid).catch(() => null);
+        if (detail && detail.messages.length) setMessages(detail.messages);
         refreshList();
       }
     },
-    [selector, useMemory, patchMessage, conversations, refreshList],
+    [patchMessage, refreshList],
   );
 
-  // currentId inside async closures.
-  const currentIdRef = useRef<string | null>(null);
-  currentIdRef.current = currentId;
-
-  const ensureConversation = useCallback(async (): Promise<string> => {
-    if (currentIdRef.current) return currentIdRef.current;
-    const conv = await api.createConversation();
-    currentIdRef.current = conv.id;
-    setCurrentId(conv.id);
-    setConversations((prev) => [{ id: conv.id, title: conv.title, updated_at: conv.updated_at }, ...prev]);
-    return conv.id;
-  }, []);
-
   const send = useCallback(
-    async (text: string) => {
+    async (text: string, fileIds?: string[]) => {
       const trimmed = text.trim();
-      if (!trimmed || streaming) return;
-      await ensureConversation();
-      const userMsg: Message = { id: `m_${Date.now()}u`, role: "user", content: trimmed, created_at: now() };
+      const hasFiles = !!(fileIds && fileIds.length);
+      if ((!trimmed && !hasFiles) || streaming) return;
+      const message = trimmed || "Please review the attached file.";
+      const userMsg: Message = {
+        id: `m_${Date.now()}u`,
+        role: "user",
+        content: message,
+        created_at: now(),
+      };
       const asstMsg: Message = {
         id: `m_${Date.now()}a`,
         role: "assistant",
@@ -175,9 +205,23 @@ export function AppProviders({ children }: { children: React.ReactNode }) {
         streaming: true,
       };
       setMessages((prev) => [...prev, userMsg, asstMsg]);
-      await runStream(trimmed, asstMsg.id);
+      await consumeStream(
+        (handlers, signal) =>
+          chatStream(
+            {
+              ...(currentIdRef.current ? { conversation_id: currentIdRef.current } : {}),
+              message,
+              model: selector,
+              use_memory: useMemory,
+              ...(hasFiles ? { files: fileIds } : {}),
+            },
+            handlers,
+            signal,
+          ),
+        asstMsg.id,
+      );
     },
-    [streaming, ensureConversation, runStream],
+    [streaming, consumeStream, selector, useMemory],
   );
 
   const stop = useCallback(() => {
@@ -192,9 +236,7 @@ export function AppProviders({ children }: { children: React.ReactNode }) {
       if (streaming) return;
       const cur = messagesRef.current;
       const idx = cur.findIndex((m) => m.id === assistantId);
-      if (idx < 1) return;
-      const prompt = [...cur.slice(0, idx)].reverse().find((m) => m.role === "user");
-      if (!prompt) return;
+      if (idx < 0) return;
       const fresh: Message = {
         id: `m_${Date.now()}a`,
         role: "assistant",
@@ -203,9 +245,13 @@ export function AppProviders({ children }: { children: React.ReactNode }) {
         streaming: true,
       };
       setMessages([...cur.slice(0, idx), fresh]);
-      await runStream(prompt.content, fresh.id);
+      await consumeStream(
+        (handlers, signal) =>
+          regenerateStream(assistantId, { model: selector, memory: useMemory }, handlers, signal),
+        fresh.id,
+      );
     },
-    [streaming, runStream],
+    [streaming, consumeStream, selector, useMemory],
   );
 
   const editUserMessage = useCallback(
@@ -214,7 +260,9 @@ export function AppProviders({ children }: { children: React.ReactNode }) {
       const cur = messagesRef.current;
       const idx = cur.findIndex((m) => m.id === id);
       if (idx < 0) return;
-      const edited: Message = { ...cur[idx], content: content.trim(), created_at: now() };
+      const trimmed = content.trim();
+      if (!trimmed) return;
+      const edited: Message = { ...cur[idx], content: trimmed, created_at: now() };
       const asst: Message = {
         id: `m_${Date.now()}a`,
         role: "assistant",
@@ -223,9 +271,13 @@ export function AppProviders({ children }: { children: React.ReactNode }) {
         streaming: true,
       };
       setMessages([...cur.slice(0, idx), edited, asst]);
-      await runStream(edited.content, asst.id);
+      await consumeStream(
+        (handlers, signal) =>
+          editMessageStream(id, trimmed, { model: selector, memory: useMemory }, handlers, signal),
+        asst.id,
+      );
     },
-    [streaming, runStream],
+    [streaming, consumeStream, selector, useMemory],
   );
 
   const newConversation = useCallback(() => {
@@ -249,6 +301,7 @@ export function AppProviders({ children }: { children: React.ReactNode }) {
   const renameConversation = useCallback(
     async (id: string, title: string) => {
       await api.renameConversation(id, title);
+      setConversations((prev) => prev.map((c) => (c.id === id ? { ...c, title } : c)));
       refreshList();
     },
     [refreshList],
@@ -258,19 +311,26 @@ export function AppProviders({ children }: { children: React.ReactNode }) {
     async (id: string) => {
       await api.deleteConversation(id);
       if (currentIdRef.current === id) newConversation();
+      setConversations((prev) => prev.filter((c) => c.id !== id));
       refreshList();
     },
     [refreshList, newConversation],
   );
 
   const branch = useCallback(async (messageId: string, kind: BranchKind) => {
-    const { run_id } = await api.branch(messageId, kind);
-    return run_id;
+    // The run id is a convenience for the chip; a failure (e.g. a not-yet-
+    // persisted message) must not block the handoff/navigation.
+    try {
+      const { run_id } = await api.branch(messageId, kind);
+      return run_id;
+    } catch {
+      return "";
+    }
   }, []);
 
   const value = useMemo<AppStore>(
     () => ({
-      mockNotice: MOCK_NOTICE,
+      mockNotice: PLATFORM_NOTICE,
       me,
       models: MODEL_CATALOG,
       selector,

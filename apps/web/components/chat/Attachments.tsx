@@ -24,7 +24,7 @@ export function useAttachments() {
         const id = localId();
         setItems((prev) => [...prev, { local_id: id, name: file.name, size: file.size, status: "uploading" }]);
         api
-          .upload({ name: file.name, size: file.size })
+          .upload(file)
           .then((res) => patch(id, { status: "parsed", markdown_bytes: res.markdown_bytes, file_id: res.file_id }))
           .catch(() => patch(id, { status: "error", error: "Couldn’t parse this file." }));
       }

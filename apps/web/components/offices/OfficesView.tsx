@@ -7,6 +7,7 @@ import { Badge } from "@/components/glass/Chip";
 import { Modal } from "@/components/glass/Modal";
 import { Button } from "@/components/glass/Button";
 import { api } from "@/lib/api/client";
+import { IS_MOCK } from "@/lib/api/config";
 import { consumeHandoff } from "@/lib/handoff";
 import type { Office, OfficeInput, OfficeRun } from "@/lib/api/types";
 import { STATUS_META, humanizeCron } from "./status";
@@ -99,33 +100,49 @@ export function OfficesView() {
     [refresh],
   );
 
-  const run = useCallback(
-    async (id: string) => {
-      setBusyId(id);
-      const { run_id } = await api.runOffice(id);
-      setBusyId(null);
-      refresh();
-      if (run_id) {
-        const detail = await api.getOfficeRun(run_id);
-        if (detail) setOpenRun(detail);
-      }
-    },
-    [refresh],
-  );
+  // Running an office kicks off a background run (202 → run_id). Open its run
+  // detail immediately; a polling effect below follows it to completion.
+  const run = useCallback(async (office: Office) => {
+    setBusyId(office.id);
+    const { run_id } = await api.runOffice(office.id);
+    setBusyId(null);
+    if (run_id) {
+      const detail = await api.getOfficeRun(office.id, run_id);
+      if (detail) setOpenRun({ ...detail, office_name: office.name });
+      // Remember the run in-session so "Last run" reopens it (the office list
+      // route carries no last-run pointer).
+      setOffices((prev) =>
+        prev ? prev.map((o) => (o.id === office.id ? { ...o, last_run_id: run_id } : o)) : prev,
+      );
+    }
+  }, []);
 
   const openLast = useCallback(async (office: Office) => {
     if (!office.last_run_id) return;
-    const detail = await api.getOfficeRun(office.last_run_id);
-    if (detail) setOpenRun(detail);
+    const detail = await api.getOfficeRun(office.id, office.last_run_id);
+    if (detail) setOpenRun({ ...detail, office_name: office.name });
   }, []);
 
-  const remove = useCallback(
-    async (id: string) => {
-      await api.deleteOffice(id);
-      refresh();
-    },
-    [refresh],
-  );
+  // Follow a still-running office to completion, preserving the office name.
+  useEffect(() => {
+    if (!openRun || openRun.status !== "running") return;
+    let live = true;
+    const t = setTimeout(async () => {
+      const detail = await api.getOfficeRun(openRun.office_id, openRun.id);
+      if (live && detail) setOpenRun({ ...detail, office_name: openRun.office_name });
+    }, 1000);
+    return () => {
+      live = false;
+      clearTimeout(t);
+    };
+  }, [openRun]);
+
+  const remove = useCallback(async (id: string) => {
+    // No DELETE route (platform.go) — drop it locally so the action reads true
+    // in-session; a reload re-lists it in live mode.
+    setOffices((prev) => (prev ? prev.filter((o) => o.id !== id) : prev));
+    await api.deleteOffice(id);
+  }, []);
 
   return (
     <div className="flow">
@@ -134,9 +151,16 @@ export function OfficesView() {
           <span className="eyebrow">Offices</span>
           <h1 className="flow__title font-display">Standing work, on a schedule.</h1>
         </div>
-        <span className="chat__note" title="Office CRUD and runs are served by the in-memory mock (API_SURFACE: planned). Runs synthesize a STATE checkpoint timeline.">
+        <span
+          className="chat__note"
+          title={
+            IS_MOCK
+              ? "Office CRUD and runs are served by the in-memory mock. Runs synthesize a STATE checkpoint timeline."
+              : "Offices are live against the gateway. Each run checkpoints its STATE and returns it here."
+          }
+        >
           <Info size={13} />
-          Mock adapter
+          {IS_MOCK ? "Mock adapter" : "Live"}
         </span>
       </header>
 
@@ -173,7 +197,7 @@ export function OfficesView() {
                       key={o.id}
                       office={o}
                       busy={busyId === o.id}
-                      onRun={() => run(o.id)}
+                      onRun={() => run(o)}
                       onOpen={() => openLast(o)}
                       onDelete={() => remove(o.id)}
                     />

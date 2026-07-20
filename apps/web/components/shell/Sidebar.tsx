@@ -1,5 +1,6 @@
 "use client";
 
+import { useState } from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { clsx } from "clsx";
@@ -9,6 +10,7 @@ import {
   Buildings,
   Cpu,
   NotePencil,
+  PencilSimple,
   TrashSimple,
   SlidersHorizontal,
 } from "@phosphor-icons/react";
@@ -39,8 +41,23 @@ export function Sidebar({ onNavigate }: { onNavigate?: () => void }) {
     currentId,
     newConversation,
     selectConversation,
+    renameConversation,
     deleteConversation,
   } = useApp();
+
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [draft, setDraft] = useState("");
+
+  const beginRename = (id: string, title: string) => {
+    setEditingId(id);
+    setDraft(title);
+  };
+  const commitRename = () => {
+    const id = editingId;
+    const title = draft.trim();
+    setEditingId(null);
+    if (id && title) void renameConversation(id, title);
+  };
 
   const goToConversation = (id: string) => {
     selectConversation(id);
@@ -113,22 +130,71 @@ export function Sidebar({ onNavigate }: { onNavigate?: () => void }) {
                 className={clsx("conv-row", c.id === currentId && pathname === "/" && "conv-row--active")}
                 role="button"
                 tabIndex={0}
-                onClick={() => goToConversation(c.id)}
-                onKeyDown={(e) => (e.key === "Enter" || e.key === " ") && (e.preventDefault(), goToConversation(c.id))}
+                onClick={() => editingId !== c.id && goToConversation(c.id)}
+                onKeyDown={(e) =>
+                  editingId !== c.id &&
+                  (e.key === "Enter" || e.key === " ") &&
+                  (e.preventDefault(), goToConversation(c.id))
+                }
               >
-                <span className="conv-row__title">{c.title}</span>
-                <span className="eyebrow" style={{ fontSize: "0.5625rem", flex: "none" }}>{timeAgo(c.updated_at)}</span>
-                <button
-                  type="button"
-                  className="conv-row__del"
-                  aria-label={`Delete ${c.title}`}
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    deleteConversation(c.id);
-                  }}
-                >
-                  <TrashSimple size={14} />
-                </button>
+                {editingId === c.id ? (
+                  <input
+                    className="conv-row__title"
+                    value={draft}
+                    autoFocus
+                    aria-label="Conversation title"
+                    style={{
+                      flex: 1,
+                      minWidth: 0,
+                      font: "inherit",
+                      color: "inherit",
+                      background: "transparent",
+                      border: "1px solid color-mix(in oklab, var(--v-ink) 30%, transparent)",
+                      borderRadius: 6,
+                      padding: "1px 5px",
+                      outline: "none",
+                    }}
+                    onClick={(e) => e.stopPropagation()}
+                    onChange={(e) => setDraft(e.target.value)}
+                    onBlur={commitRename}
+                    onKeyDown={(e) => {
+                      e.stopPropagation();
+                      if (e.key === "Enter") {
+                        e.preventDefault();
+                        commitRename();
+                      } else if (e.key === "Escape") {
+                        setEditingId(null);
+                      }
+                    }}
+                  />
+                ) : (
+                  <>
+                    <span className="conv-row__title">{c.title}</span>
+                    <span className="eyebrow" style={{ fontSize: "0.5625rem", flex: "none" }}>{timeAgo(c.updated_at)}</span>
+                    <button
+                      type="button"
+                      className="conv-row__del"
+                      aria-label={`Rename ${c.title}`}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        beginRename(c.id, c.title);
+                      }}
+                    >
+                      <PencilSimple size={14} />
+                    </button>
+                    <button
+                      type="button"
+                      className="conv-row__del"
+                      aria-label={`Delete ${c.title}`}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        deleteConversation(c.id);
+                      }}
+                    >
+                      <TrashSimple size={14} />
+                    </button>
+                  </>
+                )}
               </div>
             ))}
           </div>

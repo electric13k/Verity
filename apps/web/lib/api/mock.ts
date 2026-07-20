@@ -19,7 +19,6 @@ import type {
   Office,
   OfficeInput,
   OfficeRun,
-  OfficeRunPhase,
   ProviderKeyInfo,
   Transcript,
   UploadResult,
@@ -149,29 +148,50 @@ function seedOffices() {
   offices.set(o2.id, o2);
 }
 
-// Build a plausible STATE.md phase timeline for a completed run.
+// Build a STATE.md checkpoint document for a completed run — same shape the
+// brain's OfficeRunner writes (services/brain/app/offices/runner.py) so the run
+// view renders identically to a live run.
+function synthStateMd(name: string, task: string, startMs: number): string {
+  return [
+    `# ${name} — STATE`,
+    "",
+    "status: done",
+    `updated: ${new Date(startMs + 54_000).toISOString()}`,
+    "",
+    "## Autonomy",
+    "This task runs unattended. Make reasonable decisions without asking; record every decision and its rationale in your output. Stop only for destructive or irreversible actions.",
+    "",
+    "## Task",
+    task,
+    "",
+    "## Phases",
+    "### plan (conductor)",
+    "1. Gather the source set for this run.\n2. Extract the key movements and their drivers.\n3. Draft to the standing format.",
+    "",
+    "### work (worker-1)",
+    "Source set assembled: 6 items in scope, 2 de-duplicated. Coverage looks complete against the brief.",
+    "",
+    "### work (worker-2)",
+    "Drivers identified. Two items dominate the movement; the rest are follow-on effects. Confidence noted inline.",
+    "",
+    "### verify (inspector)",
+    "APPROVED — consistent with the sources and the standing format. One figure was rounded; flagged in the notes.",
+    "",
+    "### converge (flow)",
+    "Briefing composed to the one-page format. Decisions and their rationale recorded for the audit trail; nothing required a stop for irreversible action.",
+    "",
+  ].join("\n");
+}
+
 function synthRun(office: Office, id: string, startMs: number): OfficeRun {
-  const phase = (role: string, phase: OfficeRunPhase["phase"], content: string, k: number): OfficeRunPhase => ({
-    role,
-    phase,
-    content,
-    at: new Date(startMs + k * 9_000).toISOString(),
-  });
-  const phases: OfficeRunPhase[] = [
-    phase("conductor", "plan", "1. Gather the source set for this run.\n2. Extract the key movements and their drivers.\n3. Draft the briefing to the standing format.", 0),
-    phase("worker-1", "work", "Source set assembled: 6 items in scope, 2 de-duplicated. Coverage looks complete against the brief.", 1),
-    phase("worker-2", "work", "Drivers identified. Two items dominate the movement; the rest are follow-on effects. Confidence noted inline.", 2),
-    phase("inspector", "verify", "APPROVED — the draft is consistent with the sources and the standing format. One figure was rounded; flagged in the notes.", 3),
-    phase("flow", "converge", "Briefing composed to the one-page format. Decisions and their rationale recorded for the audit trail; nothing required a stop for irreversible action.", 4),
-    phase("flow", "done", "", 5),
-  ];
   return {
     id,
     office_id: office.id,
     office_name: office.name,
     status: "done",
     started_at: new Date(startMs).toISOString(),
-    phases,
+    finished_at: new Date(startMs + 54_000).toISOString(),
+    state_md: synthStateMd(office.name, office.brief, startMs),
   };
 }
 
@@ -318,7 +338,7 @@ export const mock = {
     return tick({ run_id: run.id });
   },
 
-  getOfficeRun(runId: string): Promise<OfficeRun | null> {
+  getOfficeRun(_officeId: string, runId: string): Promise<OfficeRun | null> {
     return tick(officeRuns.get(runId) ?? null);
   },
 
@@ -349,7 +369,7 @@ export const mock = {
   // ── Upload ───────────────────────────────────────────────────────────────
   // Multipart → markitdown → markdown bytes. The mock derives a plausible
   // parsed size from the file so the chip lifecycle reads true.
-  upload(file: { name: string; size: number }): Promise<UploadResult> {
+  upload(file: File): Promise<UploadResult> {
     const bytes = Math.max(48, Math.round(file.size * 0.42));
     return new Promise((r) =>
       setTimeout(

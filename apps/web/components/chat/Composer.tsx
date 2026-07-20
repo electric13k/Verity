@@ -35,8 +35,12 @@ export function Composer() {
   const submit = () => {
     const t = text.trim();
     if ((!t && attachments.items.length === 0) || streaming || uploading) return;
+    // Only parsed files carry a server file_id to fold into chat context.
+    const fileIds = attachments.items
+      .filter((a) => a.status === "parsed" && a.file_id)
+      .map((a) => a.file_id as string);
     setText("");
-    void send(t);
+    void send(t, fileIds);
     attachments.clear();
     requestAnimationFrame(() => ref.current?.focus());
   };

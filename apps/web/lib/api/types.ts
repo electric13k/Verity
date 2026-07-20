@@ -26,6 +26,8 @@ export interface Conversation {
 
 export interface ConversationDetail extends Conversation {
   messages: Message[];
+  /** tokenized public share id (GET /v1/conversations/:id returns it) */
+  share_id?: string;
 }
 
 // Gateway emits confidence as { score, rationale }. The band is derived
@@ -72,6 +74,7 @@ export interface ChatRequest {
   message: string;
   model?: string;
   use_memory?: boolean;
+  files?: string[]; // uploaded file ids to fold into context
 }
 
 export interface Usage {
@@ -79,7 +82,17 @@ export interface Usage {
   output_tokens: number;
 }
 
+// The chat SSE stream opens with a `meta` frame carrying the conversation id
+// (a new conversation surfaces its real id + auto-name here), the assistant
+// message id, and — for a freshly-named conversation — its title.
+export interface ChatMeta {
+  conversation_id: string;
+  message_id: string;
+  title?: string;
+}
+
 export interface ChatStreamHandlers {
+  onMeta?: (meta: ChatMeta) => void;
   onDelta?: (text: string) => void;
   onUsage?: (usage: Usage) => void;
   onConfidence?: (c: { score: number; rationale?: string }) => void;
@@ -163,20 +176,18 @@ export interface Office {
   last_run_id?: string;
 }
 
-export interface OfficeRunPhase {
-  role: string;
-  phase: FlowPhase;
-  content: string;
-  at: string;
-}
-
+// A run's detail (GET /v1/offices/:id/runs/:run_id). The backend checkpoints
+// each phase into a STATE.md document and returns it verbatim as `state_md`;
+// the run view renders that markdown as the checkpoint timeline. `office_name`
+// is not on the wire — the caller fills it from the office it opened.
 export interface OfficeRun {
   id: string;
   office_id: string;
   office_name: string;
-  status: OfficeStatus;
+  status: OfficeStatus; // running | done | failed
   started_at: string;
-  phases: OfficeRunPhase[]; // the STATE.md checkpoint timeline
+  finished_at?: string;
+  state_md: string; // the STATE.md checkpoint document
 }
 
 export interface OfficeInput {
@@ -222,4 +233,32 @@ export interface Transcript {
   title: string;
   created_at: string;
   messages: Message[];
+}
+
+// ---- platform adapter surface (planned routes) ----------------------------
+//
+// The one seam between live and mock. Both lib/api/live.ts (gateway) and
+// lib/api/mock.ts (dev fallback) implement this; client.ts picks one ONCE so
+// no caller ever branches on live-vs-mock. Streaming routes (chat, flows,
+// compute, regenerate, edit) are always live and live outside this surface.
+export interface PlatformApi {
+  me(): Promise<Me>;
+  listConversations(): Promise<Conversation[]>;
+  getConversation(id: string): Promise<ConversationDetail | null>;
+  createConversation(title?: string): Promise<ConversationDetail>;
+  renameConversation(id: string, title: string): Promise<void>;
+  deleteConversation(id: string): Promise<void>;
+  branch(messageId: string, kind: BranchKind): Promise<BranchResult>;
+  listOffices(): Promise<Office[]>;
+  createOffice(input: OfficeInput): Promise<Office>;
+  deleteOffice(id: string): Promise<void>;
+  runOffice(id: string): Promise<{ run_id: string }>;
+  getOfficeRun(officeId: string, runId: string): Promise<OfficeRun | null>;
+  getProviderKeys(): Promise<ProviderKeyInfo[]>;
+  putProviderKey(provider: string, key: string): Promise<void>;
+  deleteProviderKey(provider: string): Promise<void>;
+  upload(file: File): Promise<UploadResult>;
+  getTranscript(shareId: string): Promise<Transcript | null>;
+  transcriptShareIds(): string[];
+  computeStats(): Promise<ComputeStats>;
 }

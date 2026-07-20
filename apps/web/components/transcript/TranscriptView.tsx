@@ -6,9 +6,10 @@ import { api } from "@/lib/api/client";
 import { renderMarkdown } from "@/lib/markdown";
 import type { Message, Transcript } from "@/lib/api/types";
 
-// Public, read-only shared transcript (GET /v1/transcripts/:share_id — mock
-// today). No workspace, no store: a share never loads the app. Print-clean —
-// the print stylesheet drops the chrome and lays the thread out on white.
+// Public, read-only shared transcript (GET /v1/transcripts/:share_id, fetched
+// live by share id). No workspace, no store: a share never loads the app.
+// Print-clean — the print stylesheet drops the chrome and lays the thread out
+// on white. An unknown/revoked id resolves to the graceful not-found state.
 
 function TurnBody({ message }: { message: Message }) {
   const html = useMemo(() => renderMarkdown(message.content), [message.content]);

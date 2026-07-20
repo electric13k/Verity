@@ -4,6 +4,7 @@ import { useCallback, useEffect, useState } from "react";
 import { Info, ShieldCheck } from "@phosphor-icons/react";
 import { Panel } from "@/components/glass/Panel";
 import { api } from "@/lib/api/client";
+import { IS_MOCK } from "@/lib/api/config";
 import type { ProviderKeyInfo } from "@/lib/api/types";
 import { ProviderKeyRow } from "./ProviderKeyRow";
 
@@ -37,9 +38,16 @@ export function SettingsView() {
           <span className="eyebrow">Settings · Provider keys</span>
           <h1 className="flow__title font-display">Your keys, or ours.</h1>
         </div>
-        <span className="chat__note" title="Key storage is served by the in-memory mock (API_SURFACE: planned). The vault is AES-256-GCM at the gateway; the client never sees key material.">
+        <span
+          className="chat__note"
+          title={
+            IS_MOCK
+              ? "Key storage is served by the in-memory mock. The real vault is AES-256-GCM at the gateway; the client never sees key material."
+              : "Keys are stored in the gateway vault (AES-256-GCM). The client only ever learns whether a provider is configured, never the material."
+          }
+        >
           <Info size={13} />
-          Mock vault
+          {IS_MOCK ? "Mock vault" : "Vault"}
         </span>
       </header>
 
