@@ -17,6 +17,7 @@ from collections.abc import AsyncIterator
 from dataclasses import dataclass
 
 from app.bop import sanitize_machinery
+from app.injection import guardrail_note, scan
 from app.providers.base import ChatMessage, Delta, Provider
 
 MAX_WORKERS = 4
@@ -69,12 +70,18 @@ def parse_subtasks(plan: str, cap: int) -> list[str]:
     return subtasks[:cap] or [plan.strip()]
 
 
-async def _complete(provider: Provider, model: str, preamble: str, content: str) -> str:
+async def _complete(
+    provider: Provider, model: str, preamble: str, content: str, guard_note: str = ""
+) -> str:
     """One non-streamed role turn. Role preambles ride in the system slot —
-    they are machinery and never enter another role's user-visible input."""
+    they are machinery and never enter another role's user-visible input. A
+    guard_note (set when the task brief is flagged HIGH by the L4 interceptor)
+    rides in the same system slot so every role treats the brief as input to
+    inspect, not an instruction to obey."""
+    system = f"{guard_note}\n\n{preamble}" if guard_note else preamble
     parts: list[str] = []
     async for event in provider.stream_chat(
-        [ChatMessage("system", preamble), ChatMessage("user", content)], model
+        [ChatMessage("system", system), ChatMessage("user", content)], model
     ):
         if isinstance(event, Delta):
             parts.append(event.text)
@@ -91,10 +98,18 @@ async def run_flow(
     kind = flow_kind or pick_flow_kind(task)
     n_workers = min(MAX_WORKERS, workers or DEFAULT_WORKERS)
 
+    # L4 user-string interceptor on the task brief (complement to wrapUntrusted,
+    # which guards retrieved/external data). HIGH → surface a neutral guard event
+    # and frame every role's system slot so the brief is inspected, not obeyed.
+    verdict = scan(task, origin="flow")
+    guard_note = guardrail_note(verdict) if verdict.severity == "high" else ""
+    if guard_note:
+        yield FlowEvent("flow", "guard", guard_note)
+
     # plan
     if kind == "converge":
         plan = await _complete(
-            provider, model, CONDUCTOR_PREAMBLE.format(n=n_workers), task
+            provider, model, CONDUCTOR_PREAMBLE.format(n=n_workers), task, guard_note
         )
         subtasks = parse_subtasks(plan, n_workers)
     else:  # diverge_converge: same task, different angles
@@ -109,7 +124,7 @@ async def run_flow(
         preamble = WORKER_PREAMBLE
         if kind == "diverge_converge":
             preamble += " " + DIVERGE_ANGLES[i % len(DIVERGE_ANGLES)]
-        return await _complete(provider, model, preamble, subtask)
+        return await _complete(provider, model, preamble, subtask, guard_note)
 
     results = await asyncio.gather(
         *(work(i, s) for i, s in enumerate(subtasks)), return_exceptions=True
@@ -128,14 +143,16 @@ async def run_flow(
 
     # verify
     merged = "\n\n---\n\n".join(products)
-    verdict = await _complete(
-        provider, model, INSPECTOR_PREAMBLE, f"Task: {task}\n\nWork products:\n{merged}"
+    review = await _complete(
+        provider, model, INSPECTOR_PREAMBLE,
+        f"Task: {task}\n\nWork products:\n{merged}", guard_note,
     )
-    yield FlowEvent("inspector", "verify", sanitize_machinery(verdict))
+    yield FlowEvent("inspector", "verify", sanitize_machinery(review))
 
     # converge
     final = await _complete(
-        provider, model, CONVERGE_PREAMBLE, f"Task: {task}\n\nWork products:\n{merged}"
+        provider, model, CONVERGE_PREAMBLE,
+        f"Task: {task}\n\nWork products:\n{merged}", guard_note,
     )
     yield FlowEvent("flow", "converge", sanitize_machinery(final))
     yield FlowEvent("flow", "done", "")
