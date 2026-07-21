@@ -1,0 +1,18 @@
+# Gateway build ignore. NOTE: this service builds from the REPO ROOT context
+# (its go.mod replace reaches ../../packages/proto/gen/go), so Docker applies
+# the context-root ignore rules, not this file. It is kept here to document the
+# service's own excludable artifacts and to apply when the dir is built alone
+# (e.g. `docker build services/gateway`). Image cleanliness does not depend on
+# it: the Dockerfile COPYs only go.mod/go.sum, the package sources, and the
+# proto module — never the items below.
+gateway            # prebuilt local binary (services/gateway/gateway)
+*.test
+*_test.go
+.git
+.github
+**/__pycache__
+**/target
+node_modules
+*.log
+.env
+.env.*
