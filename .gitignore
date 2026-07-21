@@ -48,3 +48,4 @@ __pycache__/
 *.egg-info/
 # Go build output
 services/gateway/gateway
+.gobin/
