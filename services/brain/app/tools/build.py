@@ -22,9 +22,12 @@ from app.mcp_client import MCPClient
 from app.repos import mcp as mcp_repo
 from app.skills.loader import load_skills
 from app.tenant import TenantCtx
+from app.tools.files import file_output_tools
+from app.tools.kb_tools import kb_tools
 from app.tools.mcp_tools import MCPToolAdapter
 from app.tools.registry import ToolRegistry
 from app.tools.skill_tools import SkillToolAdapter
+from app.tools.web import WebFetchTool, WebSearchTool
 
 log = logging.getLogger("brain.tools")
 
@@ -76,7 +79,24 @@ async def mcp_consented_tools(user_id: str) -> list[MCPToolAdapter]:
     return out
 
 
+def builtin_tools() -> list:
+    """Server-provided tools always advertised to a tool-capable model. Each
+    degrades cleanly when unconfigured (web search/fetch, image gen) or when an
+    optional lib is absent (file-output) — being unconfigured is a runtime
+    degrade, never an absent tool. No consent gate: these call only
+    server-configured endpoints (web_fetch → the internal SSRF-guarded fetch
+    service; web_search → the one configured provider) or the caller's own
+    tenant store (kb/file-output), never a user-supplied host."""
+    return [
+        WebSearchTool(),
+        WebFetchTool(),
+        *file_output_tools(),
+        *kb_tools(),
+    ]
+
+
 async def build_registry(tenant: TenantCtx) -> ToolRegistry:
-    tools: list = list(skill_tools())
+    tools: list = list(builtin_tools())
+    tools.extend(skill_tools())
     tools.extend(await mcp_consented_tools(tenant.user_id))
     return ToolRegistry(tools)

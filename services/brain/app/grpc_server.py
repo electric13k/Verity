@@ -21,6 +21,7 @@ from app.config import settings
 from app.confidence import score_response
 from app.db import db
 from app.flows.engine import run_flow
+from app.flows.research import run_research_flow
 from app.injection import guardrail_note, scan
 from app.memory.service import memory_service
 from app.platform_server import PlatformServicer
@@ -588,12 +589,23 @@ class BrainServicer(brain_pb2_grpc.BrainServiceServicer):
             "flow start user=%s provider=%s kind=%s request_id=%s",
             tenant.user_id, provider.name, request.flow_kind or "auto", tenant.request_id,
         )
-        final = ""
-        try:
-            async for event in run_flow(
+        # G5: "wide_research" is a research variant of the flow engine — parallel
+        # retrieve+synthesize subagents (web/kb tools) converging to a cited
+        # report. It needs the tenant (memory/KB are tenant-scoped), so it is
+        # dispatched here rather than inside run_flow. Every other kind runs the
+        # base conductor/worker/inspector flow unchanged.
+        if request.flow_kind == "wide_research":
+            stream = run_research_flow(
+                provider, model, request.task, tenant, workers=request.workers
+            )
+        else:
+            stream = run_flow(
                 provider, model, request.task,
                 flow_kind=request.flow_kind, workers=request.workers,
-            ):
+            )
+        final = ""
+        try:
+            async for event in stream:
                 if event.phase == "converge":
                     final = event.content
                 yield brain_pb2.FlowEvent(

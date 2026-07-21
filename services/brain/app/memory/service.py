@@ -99,46 +99,53 @@ class CogneeStore:
         return [MemoryItem(content=str(r)) for r in results[:k]]
 
 
-class MemoryService:
-    """Selects a memory backend once, at construction, and degrades per-call.
+def build_fallback_store():
+    """Durable fallback backend: Obsidian vault when configured, else the
+    in-process store. Shared by MemoryService and the knowledge base."""
+    if settings.obsidian_vault_path:
+        from app.memory.obsidian import ObsidianStore
 
-    Precedence (plan §0, "cognee = PRIMARY"):
+        return ObsidianStore(settings.obsidian_vault_path)
+    return InProcessStore()
+
+
+def select_primary_store():
+    """Highest-precedence available memory/KB backend, or None to use the
+    fallback. Precedence (plan §0, "cognee = PRIMARY"):
       1. cognee library  — VERITY_COGNEE=1 and the optional `cognee` extra is
          importable and inits (real add → cognify → search knowledge graph);
       2. remote cognee   — cognee_url set (HTTP shim, Stage-B split deploy);
-      3. Obsidian vault  — OBSIDIAN_VAULT_PATH set (durable markdown fallback);
-      4. in-process      — always available, keeps the pipeline/tests honest.
-    Steps 3-4 are the ``_fallback``: recall/learn degrade to it whenever the
-    chosen primary errors, so a missing model or unreachable cognee never fails
-    the chat. Boot degrades, never dies.
+      3. None            — caller uses the durable fallback.
+    """
+    if settings.cognee_enabled:
+        try:
+            from app.memory.cognee_store import CogneeLibraryStore
+
+            store = CogneeLibraryStore()
+            log.info("memory primary: cognee library (knowledge graph)")
+            return store
+        except Exception as exc:  # not installed / init failure → degrade
+            log.warning(
+                "VERITY_COGNEE set but cognee unavailable (%s); degrading", exc
+            )
+    if settings.cognee_url:
+        log.info("memory primary: remote cognee (HTTP)")
+        return CogneeStore(settings.cognee_url)
+    return None
+
+
+class MemoryService:
+    """Selects a memory backend once, at construction, and degrades per-call.
+
+    Steps 3-4 of the precedence (see ``select_primary_store``) are the
+    ``_fallback``: recall/learn degrade to it whenever the chosen primary
+    errors, so a missing model or unreachable cognee never fails the chat. Boot
+    degrades, never dies.
     """
 
     def __init__(self) -> None:
-        if settings.obsidian_vault_path:
-            from app.memory.obsidian import ObsidianStore
-
-            self._fallback = ObsidianStore(settings.obsidian_vault_path)
-        else:
-            self._fallback = InProcessStore()
-        self._primary_store = self._select_primary()
-
-    def _select_primary(self):
-        """Highest-precedence available backend, or None to use the fallback."""
-        if settings.cognee_enabled:
-            try:
-                from app.memory.cognee_store import CogneeLibraryStore
-
-                store = CogneeLibraryStore()
-                log.info("memory primary: cognee library (knowledge graph)")
-                return store
-            except Exception as exc:  # not installed / init failure → degrade
-                log.warning(
-                    "VERITY_COGNEE set but cognee unavailable (%s); degrading", exc
-                )
-        if settings.cognee_url:
-            log.info("memory primary: remote cognee (HTTP)")
-            return CogneeStore(settings.cognee_url)
-        return None
+        self._fallback = build_fallback_store()
+        self._primary_store = select_primary_store()
 
     @property
     def _primary(self):

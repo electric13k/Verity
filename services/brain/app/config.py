@@ -39,9 +39,51 @@ class Settings(BaseSettings):
     cognee_llm_model: str | None = None      # e.g. gpt-4o-mini
     cognee_llm_api_key: str | None = None    # secret; handed to cognee, never logged
 
+    # G2 web tools. The headless-browser fetch service (backlog G11) has a
+    # sensible private-net default, so web_fetch is "configured" out of the box
+    # and simply DEGRADES (clean "web fetch unavailable" result) when the
+    # service is unreachable — no new required env. web_search is unconfigured
+    # until a provider key/url appears; it degrades to "search not configured"
+    # (never fabricates results). Provider auto-selects from whichever of
+    # Tavily / Brave / SearXNG is configured, unless pinned by
+    # WEB_SEARCH_PROVIDER. Keys are secrets — never logged.
+    fetch_service_url: str = Field(
+        default="http://fetch:8400", validation_alias="FETCH_SERVICE_URL"
+    )
+    web_search_provider: str | None = None   # tavily | brave | searxng (else auto)
+    tavily_api_key: str | None = None        # secret
+    brave_api_key: str | None = None         # secret
+    searxng_url: str | None = None           # self-hosted SearXNG JSON endpoint
+
+    # G9 file-output deliverables + G7 knowledge base: on-disk, tenant-scoped
+    # roots (no new DB table, no new required env — default to a temp dir).
+    output_files_dir: str | None = None      # deliverable store root (else tempdir)
+    kb_dir: str | None = None                # KB doc-index root (else tempdir)
+    # G9 image generation is provider-gated; unset → generate_image degrades.
+    image_api_key: str | None = None         # secret; enables generate_image
+
     def missing(self) -> list[str]:
-        """Env-var names (upper-cased) for every unset setting."""
-        return [name.upper() for name, value in self.model_dump().items() if value is None]
+        """Env-var names (upper-cased) for every unset setting.
+
+        Optional feature toggles whose absence just means "that feature is off"
+        (web-search keys, image key, the on-disk store roots that default to a
+        temp dir) are excluded so /healthz reports genuinely-needed config, not
+        every off-by-default capability."""
+        return [
+            name.upper()
+            for name, value in self.model_dump().items()
+            if value is None and name.upper() not in _NON_BLOCKING
+        ]
+
+
+# Settings whose absence is a normal, fully-degraded state — excluded from the
+# /healthz "missing" list so it stays about config a deploy genuinely needs.
+_NON_BLOCKING = frozenset(
+    {
+        "WEB_SEARCH_PROVIDER", "TAVILY_API_KEY", "BRAVE_API_KEY", "SEARXNG_URL",
+        "OUTPUT_FILES_DIR", "KB_DIR", "IMAGE_API_KEY",
+    }
+)
 
 
 settings = Settings()
