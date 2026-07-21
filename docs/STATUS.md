@@ -26,7 +26,31 @@ Tracking against [`MASTER_PLAN.md`](MASTER_PLAN.md) §7.
 
 - **Memory stack (user, 2026-07-18):** cognee (self-hosted from github.com/topoteretes/cognee) is the primary brain engine; the durable fallback is an **Obsidian-compatible markdown vault** (`OBSIDIAN_VAULT_PATH`) — one note per memory with YAML frontmatter, browsable/editable directly in Obsidian. Postgres `memories` table remains as an optional index, not the fallback.
 
+## Competitor-gap backlog (see [`COMPETITOR_GAPS.md`](COMPETITOR_GAPS.md))
+
+- **G1 — agentic tool-use loop: ✅ done (backend).** Provider abstraction now
+  carries tool use end to end: `stream_chat(messages, model, tools)` advertises
+  tools and emits `ToolCall` events (Anthropic `tool_use` streaming; OpenAI
+  `tool_calls` streaming; tool-less providers degrade to text). New
+  `app/tools/` registry exposes existing capabilities as callable tools —
+  consented MCP tools (per-tool consent enforced; unconsented never offered,
+  fails closed) and sandboxed skills (all isolation preserved). `ChatStream`
+  runs the model→tool→model loop, streaming assistant deltas plus BOP-sanitized
+  `ChatToolActivity` events; tool results are wrapUntrusted-wrapped before
+  re-entering context and cannot forge a tool call. Bounded by iteration count,
+  per-tool timeout, and a total-loop budget (fail safe on exceed). Proto: added
+  `ChatToolActivity` to the `ChatChunk` oneof (regenerated Go + Python stubs) +
+  a `tool` SSE case in `services/gateway/chat.go` — the one sanctioned
+  cross-territory reach for G1.
+- **G10 — Gemini provider: ✅ done.** `gemini:<model>` user-key provider via
+  Google's OpenAI-compatible endpoint (AES vault path like the others; tool
+  calling rides the shared OpenAI-compat code path); degrades when unkeyed;
+  surfaced in `/v1/me` provider list.
+
 ## Notes
 
 - Dev container Python is 3.11; plan targets 3.12 — `requires-python = ">=3.11"` for now, bump at Stage B deploy.
+- Tool-loop bounds are env-tunable with safe defaults (no new required env):
+  `VERITY_MAX_TOOL_ITERATIONS` (6), `VERITY_TOOL_TIMEOUT_SECONDS` (30),
+  `VERITY_TOOL_LOOP_BUDGET_SECONDS` (120).
 - The v1 prototype is not part of this branch — it lives untouched on `main` until the M6 retirement gate. v2 code never copies from it.

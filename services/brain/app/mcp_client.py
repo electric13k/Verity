@@ -197,9 +197,12 @@ class MCPClient:
             for t in result.get("tools", [])
         ]
 
-    async def call_tool(self, name: str, arguments: dict, *, consent: bool) -> str:
-        """Returns prompt-safe (wrapped) tool output. Refuses without
-        explicit consent — fail closed."""
+    async def call_tool_raw(self, name: str, arguments: dict, *, consent: bool) -> str:
+        """The tool's text output, UNWRAPPED. Refuses without explicit consent —
+        fail closed. Callers that feed this into a prompt MUST wrap it first
+        (wrapUntrusted); the tool registry is the single choke point that does so
+        (and BOP-sanitizes) uniformly across every tool. Use ``call_tool`` for a
+        directly-prompt-safe (wrapped) result."""
         if not consent:
             raise ConsentRequired(f"user consent required for tool {name!r}")
         if not self._initialized:
@@ -210,4 +213,10 @@ class MCPClient:
             for c in result.get("content", [])
             if c.get("type") == "text"
         ]
-        return wrap_untrusted("\n".join(parts), source=f"mcp:{name}")
+        return "\n".join(parts)
+
+    async def call_tool(self, name: str, arguments: dict, *, consent: bool) -> str:
+        """Returns prompt-safe (wrapped) tool output. Refuses without
+        explicit consent — fail closed."""
+        raw = await self.call_tool_raw(name, arguments, consent=consent)
+        return wrap_untrusted(raw, source=f"mcp:{name}")

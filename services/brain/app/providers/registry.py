@@ -24,12 +24,19 @@ log = logging.getLogger("brain.providers")
 DEFAULT_SELECTOR_ENV = "VERITY_DEFAULT_MODEL"
 
 OLLAMA_CLOUD_URL = "https://ollama.com/v1"
+# Google exposes an OpenAI-compatible surface (chat/completions + function
+# calling + streaming) at this base — the "openai-compat where possible" path
+# (ai.google.dev/gemini-api/docs/openai). Gemini's functionDeclarations are
+# mapped to OpenAI-style tools under the hood, so tool use rides the exact same
+# tested OpenAICompatProvider code path as OpenAI.
+GEMINI_OPENAI_URL = "https://generativelanguage.googleapis.com/v1beta/openai"
 
 # Providers that take a user-suppliable key, and their env-fallback var. Drives
 # both key resolution and the /v1/me capability report.
 KEYED_PROVIDERS: dict[str, str] = {
     "anthropic": "ANTHROPIC_API_KEY",
     "openai": "OPENAI_API_KEY",
+    "gemini": "GEMINI_API_KEY",
 }
 # House providers: availability is purely env-gated, no user key row.
 HOUSE_PROVIDERS = ("verity",)
@@ -102,6 +109,20 @@ def _resolve_with_key(
             if not key:
                 raise ProviderError("no OpenAI key configured")
             return OpenAICompatProvider(api_key=key), model
+        case "gemini" | "google":
+            # G10: user-key Google Gemini via its OpenAI-compatible endpoint.
+            # Degrades (raises a user-safe error) when unkeyed; tool-calling
+            # works through the shared OpenAI-compat path.
+            key = (
+                user_key
+                or os.environ.get("GEMINI_API_KEY", "")
+                or os.environ.get("GOOGLE_API_KEY", "")
+            )
+            if not key:
+                raise ProviderError("no Gemini key configured")
+            return OpenAICompatProvider(
+                api_key=key, base_url=GEMINI_OPENAI_URL, name="gemini"
+            ), model
         case "ollama":
             # Local ollama needs no key.
             base = os.environ.get("OLLAMA_BASE_URL", "http://127.0.0.1:11434/v1")

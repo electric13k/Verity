@@ -71,7 +71,18 @@ message ChatChunk {
     ChatUsage usage = 2;         // terminal chunk
     ChatConfidence confidence = 3;
     ChatMeta meta = 4;           // FIRST chunk: conversation id + message id + title
+    ChatToolActivity tool_activity = 5;  // G1: sanitized tool-use activity for the UI
   }
+}
+
+// Emitted during the agentic tool-use loop so the client can show what the model
+// is doing. Blind Orchestration Protocol: machinery is summarized, task
+// substance preserved. Never carries a raw (untrusted) tool result — only a
+// sanitized note that a call is happening.
+message ChatToolActivity {
+  string tool = 1;      // tool name (sanitized)
+  string summary = 2;   // BOP-sanitized summary of the call
+  string phase = 3;     // "call" | "result" | "error" | "budget"
 }
 
 // Emitted first so a new conversation surfaces its id/auto-name to the client.

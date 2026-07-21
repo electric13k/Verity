@@ -117,6 +117,15 @@ func streamChatChunks(w *bufio.Writer, stream chatChunkClient) {
 				"score":     p.Confidence.Score,
 				"rationale": p.Confidence.Rationale,
 			})
+		case *verityv1.ChatChunk_ToolActivity:
+			// G1: sanitized tool-use activity (BOP: machinery redacted upstream).
+			if sseEvent(w, "tool", fiber.Map{
+				"tool":    p.ToolActivity.Tool,
+				"summary": p.ToolActivity.Summary,
+				"phase":   p.ToolActivity.Phase,
+			}) != nil {
+				return
+			}
 		}
 	}
 }

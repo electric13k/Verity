@@ -6,13 +6,17 @@ in a request body is trusted for identity.
 """
 
 import asyncio
+import inspect
 import logging
+import os
+import time
 
 import grpc
 
 import app.pb  # noqa: F401  (puts generated stubs on sys.path)
 from verity.v1 import brain_pb2, brain_pb2_grpc, common_pb2, core_pb2, core_pb2_grpc
 
+from app.bop import sanitize_machinery
 from app.config import settings
 from app.confidence import score_response
 from app.db import db
@@ -22,12 +26,21 @@ from app.memory.service import memory_service
 from app.platform_server import PlatformServicer
 from app.pb.verity.v1 import platform_pb2_grpc
 from app.providers import registry
-from app.providers.base import ChatMessage, Delta, Provider, ProviderError, Usage
+from app.providers.base import (
+    ChatMessage,
+    Delta,
+    Provider,
+    ProviderError,
+    ToolCall,
+    Usage,
+)
 from app.refiner import refine
 from app.repos import conversations as conversations_repo
 from app.repos import files as files_repo
 from app.repos import messages as messages_repo
 from app.tenant import TenantCtx, require_tenant
+from app.tools import ToolRegistry, activity_summary, build_registry, prompt_safe
+from app.tools.base import ToolResult
 from app.wrap import wrap_untrusted
 
 log = logging.getLogger("brain.grpc")
@@ -35,6 +48,39 @@ log = logging.getLogger("brain.grpc")
 VERSION = "0.1.0"
 
 METADATA_KEYS = ("x-verity-user-id", "x-verity-org-id", "x-verity-request-id")
+
+# Agentic tool-use loop bounds (fail safe on exceed). No new required env: all
+# have safe defaults; the loop degrades to a single, tool-less turn when no
+# tools are configured.
+MAX_TOOL_ITERATIONS = int(os.environ.get("VERITY_MAX_TOOL_ITERATIONS", "6"))
+PER_TOOL_TIMEOUT = float(os.environ.get("VERITY_TOOL_TIMEOUT_SECONDS", "30"))
+TOTAL_LOOP_BUDGET = float(os.environ.get("VERITY_TOOL_LOOP_BUDGET_SECONDS", "120"))
+
+
+async def _rpc_cancelled(context) -> bool:
+    """Best-effort cancellation check. Absent/odd on some contexts, so guard it —
+    a false 'not cancelled' just falls back to natural generator teardown, never
+    a spurious break."""
+    checker = getattr(context, "cancelled", None)
+    if checker is None:
+        return False
+    try:
+        result = checker()
+        if inspect.isawaitable(result):
+            result = await result
+        return bool(result)
+    except Exception:
+        return False
+
+
+def _tool_activity(tool: str, summary: str, phase: str) -> "brain_pb2.ChatChunk":
+    """A BOP-sanitized tool-activity chunk. Machinery is redacted; the raw tool
+    result never appears here — only that a call happened."""
+    return brain_pb2.ChatChunk(
+        tool_activity=brain_pb2.ChatToolActivity(
+            tool=sanitize_machinery(tool)[:64], summary=summary[:400], phase=phase
+        )
+    )
 
 # Continuous-learning tasks run off the response path (never block the user).
 # Two hazards the naive create_task() had (M5): the loop may GC a pending task
@@ -218,9 +264,20 @@ class BrainServicer(brain_pb2_grpc.BrainServiceServicer):
         provider_messages: list[ChatMessage],
         learn_user_text: str,
         title: str,
+        tool_registry: ToolRegistry | None = None,
     ):
-        """Shared streaming tail for chat / regenerate / edit: meta first, then
-        deltas, usage, confidence; persist the assistant turn; learn off-path."""
+        """Shared streaming tail for chat / regenerate / edit.
+
+        Runs the agentic model→tool→model loop: meta first, then, each turn,
+        assistant text deltas (streamed as today) PLUS tool-activity events, then
+        tool execution, feeding wrapped results back until the model stops
+        requesting tools. Bounded by iteration count, per-tool timeout, and a
+        total wall-clock budget — on exceed it fails safe and finalizes with what
+        it has. Confidence over the full visible text; persist; learn off-path.
+
+        With no tools (empty registry or a tool-less provider) this collapses to
+        exactly one provider turn — identical to the pre-loop behaviour.
+        """
         yield brain_pb2.ChatChunk(
             meta=brain_pb2.ChatMeta(
                 conversation_id=conversation_id or "",
@@ -228,19 +285,102 @@ class BrainServicer(brain_pb2_grpc.BrainServiceServicer):
                 title=title or "",
             )
         )
-        parts: list[str] = []
+        tools = (
+            tool_registry.specs()
+            if (tool_registry and provider.supports_tools)
+            else None
+        )
+        messages = list(provider_messages)
+        parts: list[str] = []  # all visible assistant text across turns
+        iterations = 0
+        loop_start = time.monotonic()
         try:
-            async for event in provider.stream_chat(provider_messages, model):
-                if isinstance(event, Delta):
-                    parts.append(event.text)
-                    yield brain_pb2.ChatChunk(delta=event.text)
-                elif isinstance(event, Usage):
+            while True:
+                iterations += 1
+                turn_text: list[str] = []
+                turn_calls: list[ToolCall] = []
+                # Call adaptively: pass tools only when we have them, so a
+                # tool-less provider with a 2-arg signature keeps working.
+                stream = (
+                    provider.stream_chat(messages, model, tools=tools)
+                    if tools is not None
+                    else provider.stream_chat(messages, model)
+                )
+                async for event in stream:
+                    if isinstance(event, Delta):
+                        parts.append(event.text)
+                        turn_text.append(event.text)
+                        yield brain_pb2.ChatChunk(delta=event.text)
+                    elif isinstance(event, Usage):
+                        yield brain_pb2.ChatChunk(
+                            usage=brain_pb2.ChatUsage(
+                                input_tokens=event.input_tokens,
+                                output_tokens=event.output_tokens,
+                            )
+                        )
+                    elif isinstance(event, ToolCall):
+                        turn_calls.append(event)
+
+                # No tool requests (or nothing to run them with) → final answer.
+                if not turn_calls or tools is None or tool_registry is None:
+                    break
+                # Fail safe on budget exceed: stop, note it, finalize.
+                if iterations >= MAX_TOOL_ITERATIONS:
+                    yield _tool_activity("loop", "tool-iteration budget reached", "budget")
+                    break
+                if time.monotonic() - loop_start > TOTAL_LOOP_BUDGET:
+                    yield _tool_activity("loop", "tool-loop time budget reached", "budget")
+                    break
+
+                # Record the assistant's tool-requesting turn, then run each tool.
+                messages.append(
+                    ChatMessage(
+                        role="assistant",
+                        content="".join(turn_text),
+                        tool_calls=tuple(turn_calls),
+                    )
+                )
+                for call in turn_calls:
                     yield brain_pb2.ChatChunk(
-                        usage=brain_pb2.ChatUsage(
-                            input_tokens=event.input_tokens,
-                            output_tokens=event.output_tokens,
+                        tool_activity=brain_pb2.ChatToolActivity(
+                            tool=sanitize_machinery(call.name)[:64],
+                            summary=activity_summary(call.name, call.arguments)[:400],
+                            phase="call",
                         )
                     )
+                    try:
+                        result = await asyncio.wait_for(
+                            tool_registry.execute(call.name, call.arguments, tenant),
+                            timeout=PER_TOOL_TIMEOUT,
+                        )
+                    except asyncio.TimeoutError:
+                        result = ToolResult(
+                            prompt_safe(
+                                f"tool {call.name!r} timed out after {PER_TOOL_TIMEOUT}s",
+                                source="tool-error",
+                            ),
+                            is_error=True,
+                        )
+                    yield _tool_activity(
+                        call.name,
+                        "error" if result.is_error else "completed",
+                        "error" if result.is_error else "result",
+                    )
+                    # Tool result is untrusted data: it rides in a role="tool"
+                    # turn (already wrapped-untrusted) — it cannot forge a tool
+                    # call or drive the loop; only the model's own tool-call
+                    # channel can.
+                    messages.append(
+                        ChatMessage(
+                            role="tool",
+                            content=result.content,
+                            tool_call_id=call.id,
+                            name=call.name,
+                            is_error=result.is_error,
+                        )
+                    )
+                if await _rpc_cancelled(context):
+                    break
         except ProviderError as exc:
             await context.abort(grpc.StatusCode.UNAVAILABLE, str(exc))
             return
@@ -323,15 +463,20 @@ class BrainServicer(brain_pb2_grpc.BrainServiceServicer):
         refinement = refine(request.user_message)
         provider_messages.append(ChatMessage(role="user", content=refinement.refined))
 
+        # Tools are only worth discovering for a tool-capable provider; a
+        # tool-less provider (echo-dev) stays single-turn text.
+        tool_registry = await build_registry(tenant) if provider.supports_tools else None
+
         log.info(
-            "chat stream user=%s provider=%s model=%s conv=%s persisted=%s request_id=%s",
+            "chat stream user=%s provider=%s model=%s conv=%s persisted=%s tools=%d request_id=%s",
             tenant.user_id, provider.name, model, conversation_id or "-",
-            db.available, tenant.request_id,
+            db.available, len(tool_registry or []), tenant.request_id,
         )
 
         async for chunk in self._stream_reply(
             context, tenant, conversation_id, assistant_msg_id,
             provider, model, provider_messages, request.user_message, title,
+            tool_registry,
         ):
             yield chunk
 
@@ -371,9 +516,11 @@ class BrainServicer(brain_pb2_grpc.BrainServiceServicer):
         new_assistant = await messages_repo.add(
             tenant.user_id, conv_id, "assistant", "", model=model
         )
+        tool_registry = await build_registry(tenant) if provider.supports_tools else None
         async for chunk in self._stream_reply(
             context, tenant, conv_id, new_assistant.id,
             provider, model, provider_messages, learn_text, "",
+            tool_registry,
         ):
             yield chunk
 
@@ -417,9 +564,11 @@ class BrainServicer(brain_pb2_grpc.BrainServiceServicer):
         new_assistant = await messages_repo.add(
             tenant.user_id, conv_id, "assistant", "", model=model
         )
+        tool_registry = await build_registry(tenant) if provider.supports_tools else None
         async for chunk in self._stream_reply(
             context, tenant, conv_id, new_assistant.id,
             provider, model, provider_messages, request.content, "",
+            tool_registry,
         ):
             yield chunk
 

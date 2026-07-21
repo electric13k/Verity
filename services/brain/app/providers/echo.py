@@ -7,14 +7,25 @@ Only offered when VERITY_DEV_MODE=1 or explicitly requested as "echo:*".
 
 from collections.abc import AsyncIterator
 
-from app.providers.base import ChatMessage, Delta, Provider, StreamEvent, Usage
+from app.providers.base import (
+    ChatMessage,
+    Delta,
+    Provider,
+    StreamEvent,
+    ToolSpec,
+    Usage,
+)
 
 
 class EchoProvider(Provider):
     name = "echo"
+    supports_tools = False  # dev provider stays text-only; tools are ignored
 
     async def stream_chat(
-        self, messages: list[ChatMessage], model: str
+        self,
+        messages: list[ChatMessage],
+        model: str,
+        tools: list[ToolSpec] | None = None,
     ) -> AsyncIterator[StreamEvent]:
         last_user = next(
             (m.content for m in reversed(messages) if m.role == "user"), ""
