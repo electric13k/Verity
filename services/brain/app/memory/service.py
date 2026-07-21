@@ -1,9 +1,14 @@
-"""Memory ("Brains"). cognee is the PRIMARY engine (self-hosted,
-github.com/topoteretes/cognee; dataset-per-user isolation). The durable
-FALLBACK is an Obsidian-compatible markdown vault (user decision
-2026-07-18) — set OBSIDIAN_VAULT_PATH and every remembered fact becomes a
-note you can open in Obsidian. Without either, an in-process store keeps
-the pipeline (and its tests) honest.
+"""Memory ("Brains"). cognee is the PRIMARY engine — the in-process cognee
+library (github.com/topoteretes/cognee) builds a per-user knowledge graph via
+add → cognify → search, keyed by dataset for tenant isolation. See
+app/memory/cognee_store.py; enable with VERITY_COGNEE=1 and the optional
+`cognee` extra.
+
+When cognee is off or unavailable the brain DEGRADES: to a remote cognee HTTP
+shim (cognee_url), then the durable Obsidian-compatible markdown vault (user
+decision 2026-07-18) — set OBSIDIAN_VAULT_PATH and every remembered fact
+becomes a note you can open in Obsidian — then an in-process store that keeps
+the pipeline (and its tests) honest. Boot degrades, never dies.
 
 Continuous learning: learn_from_exchange() runs after every chat/flow
 exchange — the tag funnel + importance threshold decide what sticks.
@@ -62,7 +67,14 @@ class InProcessStore:
 
 
 class CogneeStore:
-    """cognee HTTP API. Dataset per user (isolation pattern from v1)."""
+    """Remote (HTTP) cognee — the SECONDARY cognee option, behind cognee_url.
+
+    The PRIMARY path is the in-process cognee library
+    (app/memory/cognee_store.py: real add → cognify → search). This HTTP client
+    is kept for a Stage-B split deploy where cognee runs as its own container
+    reached over the network; it is a thin add/search shim (no cognify step, and
+    the endpoints are unverified against the current cognee server), so it ranks
+    below the library path. Dataset per user (isolation pattern from v1)."""
 
     def __init__(self, base_url: str, client: httpx.AsyncClient | None = None):
         self._base = base_url.rstrip("/")
@@ -88,6 +100,19 @@ class CogneeStore:
 
 
 class MemoryService:
+    """Selects a memory backend once, at construction, and degrades per-call.
+
+    Precedence (plan §0, "cognee = PRIMARY"):
+      1. cognee library  — VERITY_COGNEE=1 and the optional `cognee` extra is
+         importable and inits (real add → cognify → search knowledge graph);
+      2. remote cognee   — cognee_url set (HTTP shim, Stage-B split deploy);
+      3. Obsidian vault  — OBSIDIAN_VAULT_PATH set (durable markdown fallback);
+      4. in-process      — always available, keeps the pipeline/tests honest.
+    Steps 3-4 are the ``_fallback``: recall/learn degrade to it whenever the
+    chosen primary errors, so a missing model or unreachable cognee never fails
+    the chat. Boot degrades, never dies.
+    """
+
     def __init__(self) -> None:
         if settings.obsidian_vault_path:
             from app.memory.obsidian import ObsidianStore
@@ -95,13 +120,29 @@ class MemoryService:
             self._fallback = ObsidianStore(settings.obsidian_vault_path)
         else:
             self._fallback = InProcessStore()
-        self._cognee: CogneeStore | None = (
-            CogneeStore(settings.cognee_url) if settings.cognee_url else None
-        )
+        self._primary_store = self._select_primary()
+
+    def _select_primary(self):
+        """Highest-precedence available backend, or None to use the fallback."""
+        if settings.cognee_enabled:
+            try:
+                from app.memory.cognee_store import CogneeLibraryStore
+
+                store = CogneeLibraryStore()
+                log.info("memory primary: cognee library (knowledge graph)")
+                return store
+            except Exception as exc:  # not installed / init failure → degrade
+                log.warning(
+                    "VERITY_COGNEE set but cognee unavailable (%s); degrading", exc
+                )
+        if settings.cognee_url:
+            log.info("memory primary: remote cognee (HTTP)")
+            return CogneeStore(settings.cognee_url)
+        return None
 
     @property
     def _primary(self):
-        return self._cognee or self._fallback
+        return self._primary_store or self._fallback
 
     async def recall(self, user_id: str, query: str, scope: str = "main", k: int = 5) -> list[str]:
         try:

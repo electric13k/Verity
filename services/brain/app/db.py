@@ -5,6 +5,16 @@ unreachable at startup) the pool stays None; persistence-dependent RPCs answer
 UNAVAILABLE with a clear message and /healthz reports DATABASE_URL missing.
 The gRPC server always starts.
 
+DATABASE_URL may be a direct Postgres DSN (local pg / Supabase *session*-mode
+pooler on 5432) OR a Supabase *transaction*-mode pooler string (host
+``*.pooler.supabase.com`` on port 6543). The transaction pooler multiplexes
+connections through PgBouncer, which does not support the server-side prepared
+statements asyncpg caches by default — so we create the pool with
+``statement_cache_size=0``. That is safe for direct connections too (it only
+disables client-side statement caching), so one code path serves both. SSL:
+asyncpg honours ``sslmode`` in the DSN (Supabase strings carry
+``?sslmode=require``), so no extra ssl handling is needed here.
+
 Tenant law: this module never derives identity. Every repo function takes a
 required ``user_id`` (from gateway gRPC metadata) and filters on it — a
 forgotten filter is a missing required argument, so it fails to compile/run
@@ -38,7 +48,14 @@ class Database:
             return
         try:
             self.pool = await asyncpg.create_pool(
-                dsn=url, min_size=1, max_size=8, command_timeout=30
+                dsn=url,
+                min_size=1,
+                max_size=8,
+                command_timeout=30,
+                # Supabase transaction pooler (PgBouncer) rejects the prepared
+                # statements asyncpg caches by default; 0 disables the cache and
+                # is harmless on direct/session connections. See module docstring.
+                statement_cache_size=0,
             )
             log.info("db pool ready")
         except Exception as exc:  # degrade, never die

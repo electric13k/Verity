@@ -16,6 +16,12 @@ dependencies = [
 
 [project.optional-dependencies]
 dev = ["pytest>=8", "pytest-asyncio>=0.24"]
+# cognee = PRIMARY memory engine, kept OPTIONAL so the brain has no new REQUIRED
+# dependency and boots (and tests) without it. Install to enable the in-process
+# knowledge-graph path: `pip install verity-brain[cognee]` + VERITY_COGNEE=1.
+# Pulls heavy transitive deps (embeddings/LLM clients) — never in the default
+# test env. The add→cognify→search API used lives in cognee 1.x.
+cognee = ["cognee>=1.0"]
 
 [build-system]
 requires = ["hatchling"]
