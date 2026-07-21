@@ -1,10 +1,9 @@
 "use client";
 
-import { useMemo } from "react";
 import { ArrowLeft } from "@phosphor-icons/react";
 import { Panel } from "@/components/glass/Panel";
 import { Badge } from "@/components/glass/Chip";
-import { renderMarkdown } from "@/lib/markdown";
+import { useMarkdown } from "@/lib/markdown";
 import type { OfficeRun } from "@/lib/api/types";
 import { STATUS_META } from "./status";
 
@@ -17,10 +16,8 @@ import { STATUS_META } from "./status";
 
 export function RunTimeline({ run, onBack }: { run: OfficeRun; onBack: () => void }) {
   const meta = STATUS_META[run.status] ?? STATUS_META.running;
-  const html = useMemo(
-    () => (run.state_md ? renderMarkdown(run.state_md) : ""),
-    [run.state_md],
-  );
+  const hasState = !!run.state_md;
+  const html = useMarkdown(run.state_md, hasState);
   const running = run.status === "running";
 
   return (
@@ -44,8 +41,12 @@ export function RunTimeline({ run, onBack }: { run: OfficeRun; onBack: () => voi
 
       <Panel raised className="run-detail__panel">
         <div className="eyebrow" style={{ marginBottom: "var(--v-space-3)" }}>STATE checkpoints</div>
-        {html ? (
-          <div className="prose-verity ckpt__prose" dangerouslySetInnerHTML={{ __html: html }} />
+        {hasState ? (
+          html === null ? (
+            <div className="prose-verity ckpt__prose msg-stream">{run.state_md}</div>
+          ) : (
+            <div className="prose-verity ckpt__prose" dangerouslySetInnerHTML={{ __html: html }} />
+          )
         ) : running ? (
           <div style={{ display: "flex", alignItems: "center", gap: "var(--v-space-3)" }}>
             <span className="think-dots" aria-label="Running"><span /><span /><span /></span>

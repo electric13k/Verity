@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { clsx } from "clsx";
@@ -38,6 +38,9 @@ export function Sidebar({ onNavigate }: { onNavigate?: () => void }) {
   const router = useRouter();
   const {
     conversations,
+    hasMoreConversations,
+    loadingConversations,
+    loadMoreConversations,
     currentId,
     newConversation,
     selectConversation,
@@ -47,6 +50,25 @@ export function Sidebar({ onNavigate }: { onNavigate?: () => void }) {
 
   const [editingId, setEditingId] = useState<string | null>(null);
   const [draft, setDraft] = useState("");
+
+  // Infinite scroll: a sentinel at the foot of the history loads the next page
+  // as it comes into view. It doubles as a "Load older" button for keyboard use
+  // and any environment without IntersectionObserver.
+  const scrollRef = useRef<HTMLDivElement>(null);
+  const sentinelRef = useRef<HTMLButtonElement>(null);
+
+  useEffect(() => {
+    const el = sentinelRef.current;
+    if (!el || !hasMoreConversations) return;
+    const io = new IntersectionObserver(
+      (entries) => {
+        if (entries.some((e) => e.isIntersecting)) loadMoreConversations();
+      },
+      { root: scrollRef.current, rootMargin: "160px" },
+    );
+    io.observe(el);
+    return () => io.disconnect();
+  }, [hasMoreConversations, loadMoreConversations, conversations.length]);
 
   const beginRename = (id: string, title: string) => {
     setEditingId(id);
@@ -116,8 +138,8 @@ export function Sidebar({ onNavigate }: { onNavigate?: () => void }) {
         History
       </div>
 
-      {/* Conversation list from the typed client. */}
-      <div className="scroll-quiet flex-1 overflow-y-auto" style={{ margin: "0 calc(-1 * var(--v-space-1))", paddingRight: "var(--v-space-1)" }}>
+      {/* Conversation list from the typed client, cursor-paginated. */}
+      <div ref={scrollRef} className="scroll-quiet flex-1 overflow-y-auto" style={{ margin: "0 calc(-1 * var(--v-space-1))", paddingRight: "var(--v-space-1)" }}>
         {conversations.length === 0 ? (
           <p className="px-3 text-sm" style={{ color: "color-mix(in oklab, var(--v-ink) 45%, transparent)" }}>
             No conversations yet.
@@ -198,6 +220,23 @@ export function Sidebar({ onNavigate }: { onNavigate?: () => void }) {
               </div>
             ))}
           </div>
+        )}
+
+        {hasMoreConversations && (
+          <button
+            ref={sentinelRef}
+            type="button"
+            className="conv-more"
+            onClick={loadMoreConversations}
+            disabled={loadingConversations}
+            aria-label="Load older conversations"
+          >
+            {loadingConversations ? (
+              <span className="think-dots" aria-hidden="true"><span /><span /><span /></span>
+            ) : (
+              "Load older"
+            )}
+          </button>
         )}
       </div>
 

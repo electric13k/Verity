@@ -1,6 +1,6 @@
 "use client";
 
-import { memo, useMemo, useState } from "react";
+import { memo, useState } from "react";
 import {
   ArrowsClockwise,
   Copy,
@@ -8,7 +8,7 @@ import {
   PencilSimple,
   WarningCircle,
 } from "@phosphor-icons/react";
-import { renderMarkdown } from "@/lib/markdown";
+import { useMarkdown } from "@/lib/markdown";
 import { useApp } from "@/lib/store";
 import type { Message } from "@/lib/api/types";
 import { ConfidenceChip } from "./ConfidenceChip";
@@ -19,10 +19,16 @@ import { Textarea } from "@/components/glass/Field";
 // One message row. User messages are quiet matcha-tinted bubbles (right,
 // editable); assistant messages render sanitized markdown (left) with a meta
 // row carrying the confidence chip and — on hover/focus — copy, regenerate,
-// and branch. Markdown is parsed whole then DOMPurify'd once (lib/markdown).
+// and branch.
+//
+// While a reply streams it renders as plaintext (line breaks preserved) so no
+// markdown re-parse runs per token. Once it settles, marked + DOMPurify parse
+// the whole thing ONCE — loaded on demand, so nothing unsanitized is ever
+// injected as HTML mid-stream.
 
 function AssistantBody({ content, streaming }: { content: string; streaming?: boolean }) {
-  const html = useMemo(() => renderMarkdown(content), [content]);
+  const html = useMarkdown(content, !streaming && !!content);
+
   if (!content && streaming) {
     return (
       <span className="think-dots" aria-label="Thinking">
@@ -30,16 +36,15 @@ function AssistantBody({ content, streaming }: { content: string; streaming?: bo
       </span>
     );
   }
-  return (
-    <div
-      className={clsxProse(streaming)}
-      dangerouslySetInnerHTML={{ __html: html }}
-    />
-  );
-}
-
-function clsxProse(streaming?: boolean): string {
-  return `prose-verity${streaming ? " stream-caret" : ""}`;
+  // Streaming, or markdown not yet loaded: readable plaintext, no HTML.
+  if (streaming || html === null) {
+    return (
+      <div className={`prose-verity msg-stream${streaming ? " stream-caret" : ""}`}>
+        {content}
+      </div>
+    );
+  }
+  return <div className="prose-verity" dangerouslySetInnerHTML={{ __html: html }} />;
 }
 
 export const MessageBubble = memo(function MessageBubble({ message }: { message: Message }) {

@@ -24,6 +24,7 @@ import {
 } from "./api/client";
 import { PLATFORM_NOTICE } from "./api/config";
 import { MODEL_CATALOG } from "./api/mock";
+import { createStreamBuffer, type StreamBuffer } from "./stream-buffer";
 import {
   bandForScore,
   type BranchKind,
@@ -33,6 +34,13 @@ import {
   type Message,
   type ModelOption,
 } from "./api/types";
+
+// Honor the user's motion preference for the streaming word cadence. Read live
+// (not cached) so a mid-session OS change is respected on the next stream.
+const prefersReducedMotion = () =>
+  typeof window !== "undefined" &&
+  typeof window.matchMedia === "function" &&
+  window.matchMedia("(prefers-reduced-motion: reduce)").matches;
 
 const DEFAULT_SELECTOR = "echo:echo";
 const now = () => new Date().toISOString();
@@ -47,6 +55,9 @@ interface AppStore {
   setUseMemory: (v: boolean) => void;
 
   conversations: Conversation[];
+  hasMoreConversations: boolean;
+  loadingConversations: boolean;
+  loadMoreConversations: () => void;
   currentId: string | null;
   messages: Message[];
   streaming: boolean;
@@ -70,13 +81,22 @@ export function AppProviders({ children }: { children: React.ReactNode }) {
   const [selector, setSelector] = useState(DEFAULT_SELECTOR);
   const [useMemory, setUseMemory] = useState(false);
   const [conversations, setConversations] = useState<Conversation[]>([]);
+  const [convCursor, setConvCursor] = useState<string | null>(null);
+  const [loadingConversations, setLoadingConversations] = useState(false);
   const [currentId, setCurrentId] = useState<string | null>(null);
   const [messages, setMessages] = useState<Message[]>([]);
   const [streaming, setStreaming] = useState(false);
 
   const abortRef = useRef<AbortController | null>(null);
+  const streamBufRef = useRef<StreamBuffer | null>(null);
   const messagesRef = useRef<Message[]>([]);
   messagesRef.current = messages;
+
+  // The pagination cursor read inside the IntersectionObserver callback, and a
+  // guard so overlapping scroll events don't fire duplicate page fetches.
+  const convCursorRef = useRef<string | null>(null);
+  convCursorRef.current = convCursor;
+  const loadingConvRef = useRef(false);
 
   // currentId inside async closures.
   const currentIdRef = useRef<string | null>(null);
@@ -85,11 +105,41 @@ export function AppProviders({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     // Both degrade to safe defaults if the gateway/DB is down (never blank).
     api.me().then(setMe);
-    api.listConversations().then(setConversations);
+    api.listConversations().then((page) => {
+      setConversations(page.items);
+      setConvCursor(page.next_cursor);
+    });
   }, []);
 
+  // Reset the list to its first page (after a send / rename / delete). Newer
+  // activity always belongs at the top, so paging state resets with it.
   const refreshList = useCallback(() => {
-    api.listConversations().then(setConversations);
+    api.listConversations().then((page) => {
+      setConversations(page.items);
+      setConvCursor(page.next_cursor);
+    });
+  }, []);
+
+  // Append the next page. Guarded so the observer can fire freely; a null cursor
+  // means the history is exhausted and there is nothing more to fetch.
+  const loadMoreConversations = useCallback(() => {
+    const cursor = convCursorRef.current;
+    if (!cursor || loadingConvRef.current) return;
+    loadingConvRef.current = true;
+    setLoadingConversations(true);
+    api
+      .listConversations(cursor)
+      .then((page) => {
+        setConversations((prev) => {
+          const seen = new Set(prev.map((c) => c.id));
+          return [...prev, ...page.items.filter((c) => !seen.has(c.id))];
+        });
+        setConvCursor(page.next_cursor);
+      })
+      .finally(() => {
+        loadingConvRef.current = false;
+        setLoadingConversations(false);
+      });
   }, []);
 
   const patchMessage = useCallback((id: string, patch: Partial<Message>) => {
@@ -108,8 +158,16 @@ export function AppProviders({ children }: { children: React.ReactNode }) {
       setStreaming(true);
       const ctrl = new AbortController();
       abortRef.current = ctrl;
-      let acc = "";
       let pendingConf: { score: number; rationale?: string } | null = null;
+
+      // Smooth the reply out word-by-word regardless of the gateway's chunk
+      // sizes. The buffer patches the growing content; the bubble renders that
+      // as plaintext while streaming and swaps to sanitized markdown on settle.
+      const buffer = createStreamBuffer({
+        reducedMotion: prefersReducedMotion(),
+        onText: (text) => patchMessage(asstId, { content: text }),
+      });
+      streamBufRef.current = buffer;
 
       await runFn(
         {
@@ -141,18 +199,23 @@ export function AppProviders({ children }: { children: React.ReactNode }) {
               asstId = realId;
             }
           },
-          onDelta: (t) => {
-            acc += t;
-            patchMessage(asstId, { content: acc });
-          },
+          onDelta: (t) => buffer.push(t),
           onConfidence: (c) => {
             pendingConf = c;
           },
-          onError: (msg) => patchMessage(asstId, { error: msg, streaming: false }),
+          onError: (msg) => {
+            buffer.cancel();
+            patchMessage(asstId, { error: msg, streaming: false });
+          },
           onDone: () => {},
         },
         ctrl.signal,
       );
+
+      // Let the buffer reveal any words still queued before the bubble swaps to
+      // its settled markdown render (a stop/error path already flushed it).
+      await buffer.finish();
+      streamBufRef.current = null;
 
       // `pendingConf` is only assigned inside the stream callback; read it
       // through a typed local so TS doesn't narrow it to `never` here.
@@ -227,6 +290,10 @@ export function AppProviders({ children }: { children: React.ReactNode }) {
   const stop = useCallback(() => {
     abortRef.current?.abort();
     abortRef.current = null;
+    // Reveal whatever already arrived at once — a stopped reply shouldn't keep
+    // trickling after the user asked it to halt.
+    streamBufRef.current?.cancel();
+    streamBufRef.current = null;
     setStreaming(false);
     setMessages((prev) => prev.map((m) => (m.streaming ? { ...m, streaming: false } : m)));
   }, []);
@@ -338,6 +405,9 @@ export function AppProviders({ children }: { children: React.ReactNode }) {
       useMemory,
       setUseMemory,
       conversations,
+      hasMoreConversations: convCursor !== null,
+      loadingConversations,
+      loadMoreConversations,
       currentId,
       messages,
       streaming,
@@ -352,7 +422,8 @@ export function AppProviders({ children }: { children: React.ReactNode }) {
       branch,
     }),
     [
-      me, selector, useMemory, conversations, currentId, messages, streaming,
+      me, selector, useMemory, conversations, convCursor, loadingConversations,
+      loadMoreConversations, currentId, messages, streaming,
       newConversation, selectConversation, renameConversation, deleteConversation,
       send, stop, regenerate, editUserMessage, branch,
     ],

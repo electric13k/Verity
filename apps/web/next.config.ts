@@ -12,6 +12,10 @@ const gatewayOrigin = process.env.GATEWAY_ORIGIN ?? "http://127.0.0.1:8080";
 
 const nextConfig: NextConfig = {
   output: "export",
+  // `output: "export"` has no image optimization server, so next/image must be
+  // told not to expect one — without this, any <Image> fails the static export.
+  // Assets ship pre-sized (see components/media/Img.tsx for the app convention).
+  images: { unoptimized: true },
   ...(isDev
     ? {
         async rewrites() {

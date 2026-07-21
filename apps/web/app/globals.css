@@ -1459,3 +1459,73 @@ body {
     color-mix(in oklab, var(--v-porcelain) 70%, transparent) 100%
   );
 }
+
+/* ------------------------------------------------------------------ *
+ * M4 perf pass — streaming plaintext, lazy-load skeletons, and the
+ * paginated history "Load older" affordance. All honor reduced motion.
+ * ------------------------------------------------------------------ */
+
+/* Mid-stream assistant text renders as plaintext (no markdown re-parse per
+ * token) with line breaks preserved, matched to the settled prose type. */
+.msg-stream {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+/* Lazy-chunk placeholder — a calm glass-tinted block with a slow sheen. It is
+ * the stand-in while a deferred bundle arrives; never a spinner. */
+.v-skeleton {
+  display: block;
+  border-radius: var(--v-radius-sm);
+  background: linear-gradient(
+    100deg,
+    color-mix(in oklab, var(--v-fog) 30%, transparent) 30%,
+    color-mix(in oklab, var(--v-fog) 58%, transparent) 50%,
+    color-mix(in oklab, var(--v-fog) 30%, transparent) 70%
+  );
+  background-size: 220% 100%;
+  animation: v-skeleton-sheen 1.6s var(--v-motion-ease) infinite;
+}
+.v-skeleton-stack {
+  display: flex;
+  flex-direction: column;
+  gap: var(--v-space-3);
+  width: 100%;
+}
+@keyframes v-skeleton-sheen {
+  from { background-position: 180% 0; }
+  to { background-position: -40% 0; }
+}
+.flow-stage-fallback { padding: var(--v-space-4) 0; }
+
+/* Paginated history: the IntersectionObserver sentinel doubles as a quiet
+ * "Load older" button, in the sidebar's mono-eyebrow register. */
+.conv-more {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  min-height: 2.25rem;
+  margin-top: var(--v-space-2);
+  padding: 0.4rem var(--v-space-3);
+  border: 0;
+  background: transparent;
+  border-radius: var(--v-radius-md);
+  cursor: pointer;
+  font-family: var(--v-font-mono);
+  font-size: 0.625rem;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: color-mix(in oklab, var(--v-ink) 42%, transparent);
+  transition: background-color var(--v-motion-fast) var(--v-motion-ease),
+    color var(--v-motion-fast) var(--v-motion-ease);
+}
+.conv-more:hover:not(:disabled) {
+  background: rgb(var(--glass-tint) / 0.5);
+  color: color-mix(in oklab, var(--v-ink) 70%, transparent);
+}
+.conv-more:disabled { cursor: default; }
+
+@media (prefers-reduced-motion: reduce) {
+  .v-skeleton { animation: none; }
+}

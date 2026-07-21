@@ -9,6 +9,8 @@ import { Menu, MenuItem } from "@/components/glass/Menu";
 import { submitComputeJob, api } from "@/lib/api/client";
 import { MODEL_CATALOG } from "@/lib/api/mock";
 import type { ComputeJobResult, ComputeStats } from "@/lib/api/types";
+// The consensus figure is a dependency-free inline SVG; a normal import keeps it
+// in the compute chunk (splitting a ~1 KB leaf would cost more than it saves).
 import { ConsensusDiagram } from "./ConsensusDiagram";
 
 // Compute — the scattered network for house model calls. Submitting a job is

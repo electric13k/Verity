@@ -17,6 +17,7 @@ import {
   type ComputeStats,
   type Conversation,
   type ConversationDetail,
+  type ConversationPage,
   type Me,
   type Message,
   type Office,
@@ -179,18 +180,23 @@ export const live: PlatformApi = {
     );
   },
 
-  async listConversations(): Promise<Conversation[]> {
+  async listConversations(cursor?: string): Promise<ConversationPage> {
+    const path = cursor
+      ? `/v1/conversations?cursor=${encodeURIComponent(cursor)}`
+      : "/v1/conversations";
     return safe(
-      getJSON<{ items: { id: string; title: string; updated_at: string }[] }>(
-        "/v1/conversations",
-      ).then((r) =>
-        (r.items ?? []).map((it) => ({
+      getJSON<{
+        items: { id: string; title: string; updated_at: string }[];
+        next_cursor?: string | null;
+      }>(path).then((r) => ({
+        items: (r.items ?? []).map((it) => ({
           id: String(it.id),
           title: it.title || "New conversation",
           updated_at: String(it.updated_at ?? ""),
         })),
-      ),
-      [],
+        next_cursor: r.next_cursor ?? null,
+      })),
+      { items: [], next_cursor: null },
     );
   },
 

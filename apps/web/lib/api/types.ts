@@ -30,6 +30,13 @@ export interface ConversationDetail extends Conversation {
   share_id?: string;
 }
 
+// GET /v1/conversations is cursor-paginated: a page of items plus the cursor for
+// the next page (null when the list is exhausted). See docs/API_SURFACE.md.
+export interface ConversationPage {
+  items: Conversation[];
+  next_cursor: string | null;
+}
+
 // Gateway emits confidence as { score, rationale }. The band is derived
 // client-side (the doc's {score, band} shape) so the chip stays declarative.
 export type ConfidenceBand = "assured" | "measured" | "tentative";
@@ -243,7 +250,7 @@ export interface Transcript {
 // compute, regenerate, edit) are always live and live outside this surface.
 export interface PlatformApi {
   me(): Promise<Me>;
-  listConversations(): Promise<Conversation[]>;
+  listConversations(cursor?: string): Promise<ConversationPage>;
   getConversation(id: string): Promise<ConversationDetail | null>;
   createConversation(title?: string): Promise<ConversationDetail>;
   renameConversation(id: string, title: string): Promise<void>;

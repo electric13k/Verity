@@ -6,3 +6,4 @@ export { Input, Textarea } from "./Field";
 export { Chip, Badge } from "./Chip";
 export { Modal } from "./Modal";
 export { Menu, MenuItem } from "./Menu";
+export { Skeleton } from "./Skeleton";

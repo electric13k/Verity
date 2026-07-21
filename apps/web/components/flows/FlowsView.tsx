@@ -1,12 +1,25 @@
 "use client";
 
 import { useCallback, useEffect, useReducer, useRef, useState } from "react";
+import dynamic from "next/dynamic";
 import { Info } from "@phosphor-icons/react";
 import { flowStream } from "@/lib/api/client";
 import { consumeHandoff } from "@/lib/handoff";
+import { Skeleton } from "@/components/glass/Skeleton";
 import type { FlowEvent, FlowKind } from "@/lib/api/types";
 import { FlowComposer } from "./FlowComposer";
-import { FlowStage } from "./FlowStage";
+
+// The staged flow visualization (role lanes + the markdown renderer for each
+// role's output) is deferred — it only mounts once a run starts, so it stays out
+// of the initial Flows bundle.
+const FlowStage = dynamic(() => import("./FlowStage").then((m) => m.FlowStage), {
+  ssr: false,
+  loading: () => (
+    <div className="flow-stage-fallback">
+      <Skeleton lines={4} aria-label="Preparing the stage" />
+    </div>
+  ),
+});
 
 // Flows — Verity's signature power-view. A task is handed to a company of
 // roles: a conductor plans, workers execute in parallel, an inspector reviews,

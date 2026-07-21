@@ -1,18 +1,33 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
+import dynamic from "next/dynamic";
 import { Info, Plus, Play, Clock, TrashSimple, ArrowRight, Buildings } from "@phosphor-icons/react";
 import { Panel } from "@/components/glass/Panel";
 import { Badge } from "@/components/glass/Chip";
 import { Modal } from "@/components/glass/Modal";
 import { Button } from "@/components/glass/Button";
+import { Skeleton } from "@/components/glass/Skeleton";
 import { api } from "@/lib/api/client";
 import { IS_MOCK } from "@/lib/api/config";
 import { consumeHandoff } from "@/lib/handoff";
 import type { Office, OfficeInput, OfficeRun } from "@/lib/api/types";
 import { STATUS_META, humanizeCron } from "./status";
 import { OfficeForm } from "./OfficeForm";
-import { RunTimeline } from "./RunTimeline";
+
+// The run timeline pulls in the markdown renderer to draw a STATE checkpoint
+// document — only needed once a run is opened, so it loads on demand.
+const RunTimeline = dynamic(
+  () => import("./RunTimeline").then((m) => m.RunTimeline),
+  {
+    ssr: false,
+    loading: () => (
+      <Panel raised className="run-detail__panel">
+        <Skeleton lines={5} aria-label="Loading run" />
+      </Panel>
+    ),
+  },
+);
 
 // Offices — a Flow with a clock and a memory. This view lists them, creates
 // them, runs one on demand, and opens a run as its STATE checkpoint timeline.

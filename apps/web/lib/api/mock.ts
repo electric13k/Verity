@@ -13,6 +13,7 @@ import type {
   ComputeStats,
   Conversation,
   ConversationDetail,
+  ConversationPage,
   Me,
   Message,
   ModelOption,
@@ -86,8 +87,50 @@ function seed(): Store {
   ]);
   conversations.set(c1.id, c1);
   conversations.set(c2.id, c2);
-  return { conversations, order: [c1.id, c2.id] };
+  const order = [c1.id, c2.id];
+
+  // A deeper history so the sidebar has real pages to scroll through. Each is a
+  // one-exchange thread with a plausible title; ages fan out across days so the
+  // "time ago" column reads like a real backlog.
+  const backlog: Array<[string, string]> = [
+    ["Rework the onboarding checklist", "Tighten the first-run steps into five plain actions."],
+    ["Compare vector stores for RAG", "Weigh pgvector against a hosted index for our scale."],
+    ["Draft the incident postmortem", "Write up the webhook outage without blame, with fixes."],
+    ["Name the compute credits unit", "Something plain that reads on an invoice line."],
+    ["Summarize the Q3 board deck", "Three slides of signal, no filler, for the pre-read."],
+    ["Debug the retry backoff", "Requests double-fire under load — find the off-by-one."],
+    ["Plan the migration to Postgres 16", "A staged cutover with a rollback at every step."],
+    ["Write release notes for 2.4", "Human-readable, feature-first, no changelog dump."],
+    ["Design the empty state for Flows", "An invitation to act, not a shrug."],
+    ["Audit the color contrast", "Where does dark mode drop below AA on body text?"],
+    ["Sketch the pricing page copy", "Say what it does before what it costs."],
+    ["Triage the flaky test suite", "Which failures are real and which are timing?"],
+    ["Outline the memory model docs", "Explain per-exchange memory without the jargon."],
+    ["Refactor the SSE reader", "One frame parser for chat, flows, and offices."],
+    ["Choose a cron format for offices", "Readable to a human, unambiguous to the runner."],
+    ["Review the consent flow for MCP", "Per-tool, server-side, no silent escalation."],
+    ["Write the transcript share blurb", "One line that explains read-only at a glance."],
+    ["Tune the confidence bands", "Where should assured, measured, tentative fall?"],
+    ["Plan the offline dev mode", "The whole UI, no keys, nothing blank."],
+    ["Draft the semiconductor briefing", "Overnight moves, likely cause, what to watch."],
+    ["Model the redundancy-2 payout", "How credits split when two nodes agree."],
+    ["Rename the settings sections", "By what people control, not how it is built."],
+  ];
+  backlog.forEach(([title, ask], i) => {
+    const c = conv(`seed_h${i}`, title, 90 + i * 47, [
+      ["user", ask, undefined],
+      ["assistant", `Here is a first pass at "${title.toLowerCase()}". Branch it into a Flow to take it further.`, 70],
+    ]);
+    conversations.set(c.id, c);
+    order.push(c.id);
+  });
+
+  return { conversations, order };
 }
+
+// Page size for the mock conversation list — small enough that the seeded
+// history spans several pages, so infinite scroll has something to fetch.
+const PAGE_SIZE = 12;
 
 const store: Store = seed();
 
@@ -245,8 +288,15 @@ export const mock = {
     });
   },
 
-  listConversations(): Promise<Conversation[]> {
-    return tick(store.order.map((id) => stripped(store.conversations.get(id)!)));
+  // Cursor-paginated to match the gateway (docs/API_SURFACE.md). The cursor is
+  // an opaque offset; `next_cursor` is null once the list is exhausted.
+  listConversations(cursor?: string): Promise<ConversationPage> {
+    const start = cursor ? Math.max(0, parseInt(cursor, 10) || 0) : 0;
+    const page = store.order.slice(start, start + PAGE_SIZE);
+    const items = page.map((id) => stripped(store.conversations.get(id)!));
+    const end = start + PAGE_SIZE;
+    const next_cursor = end < store.order.length ? String(end) : null;
+    return tick({ items, next_cursor });
   },
 
   getConversation(id: string): Promise<ConversationDetail | null> {

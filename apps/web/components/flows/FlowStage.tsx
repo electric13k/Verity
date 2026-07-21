@@ -1,6 +1,5 @@
 "use client";
 
-import { useMemo } from "react";
 import {
   Compass,
   Cube,
@@ -10,7 +9,7 @@ import {
   CheckCircle,
 } from "@phosphor-icons/react";
 import { Panel } from "@/components/glass/Panel";
-import { renderMarkdown } from "@/lib/markdown";
+import { useMarkdown } from "@/lib/markdown";
 import type { FlowRunState, LaneStatus, WorkerLane } from "./FlowsView";
 
 // The stage: a phase ledger (the score) beside the role lanes. Lanes rise in
@@ -18,7 +17,8 @@ import type { FlowRunState, LaneStatus, WorkerLane } from "./FlowsView";
 // the answer is the focus of attention (design rule 4).
 
 function Prose({ content }: { content: string }) {
-  const html = useMemo(() => renderMarkdown(content), [content]);
+  const html = useMarkdown(content);
+  if (html === null) return <div className="prose-verity msg-stream">{content}</div>;
   return <div className="prose-verity" dangerouslySetInnerHTML={{ __html: html }} />;
 }
 

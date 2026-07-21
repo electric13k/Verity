@@ -1,9 +1,9 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 import { Printer, LockSimple } from "@phosphor-icons/react";
 import { api } from "@/lib/api/client";
-import { renderMarkdown } from "@/lib/markdown";
+import { useMarkdown } from "@/lib/markdown";
 import type { Message, Transcript } from "@/lib/api/types";
 
 // Public, read-only shared transcript (GET /v1/transcripts/:share_id, fetched
@@ -12,10 +12,11 @@ import type { Message, Transcript } from "@/lib/api/types";
 // on white. An unknown/revoked id resolves to the graceful not-found state.
 
 function TurnBody({ message }: { message: Message }) {
-  const html = useMemo(() => renderMarkdown(message.content), [message.content]);
+  const html = useMarkdown(message.content, message.role === "assistant");
   if (message.role === "user") {
     return <div className="t-turn__user">{message.content}</div>;
   }
+  if (html === null) return <div className="prose-verity msg-stream">{message.content}</div>;
   return <div className="prose-verity" dangerouslySetInnerHTML={{ __html: html }} />;
 }
 
