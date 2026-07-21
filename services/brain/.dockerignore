@@ -1,0 +1,19 @@
+# Brain build ignore. Context = services/brain (self-contained; app/pb is
+# committed, so no repo-root proto tree is pulled in). These rules keep the
+# build context — and therefore the image — free of dev-only artifacts. The
+# Dockerfile also COPYs only pyproject.toml + app/, never the items below.
+.venv
+venv
+**/__pycache__
+*.pyc
+*.pyo
+.pytest_cache
+tests
+dist
+build
+*.egg-info
+.env
+.env.*
+*.log
+Dockerfile
+.dockerignore

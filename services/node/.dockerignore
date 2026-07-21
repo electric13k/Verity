@@ -1,0 +1,12 @@
+# Node build ignore. NOTE: this service builds from the REPO ROOT context (its
+# build.rs reaches ../../packages/proto), so Docker applies the context-root
+# ignore rules, not this file — it is kept to document the service's own
+# excludable artifacts and to apply when the dir is built alone. Image
+# cleanliness does not depend on it: the Dockerfile COPYs only packages/proto,
+# the Cargo manifests, build.rs, and src/ — never the items below.
+target            # cargo build dir (huge)
+.env
+.env.*
+*.log
+Dockerfile
+.dockerignore

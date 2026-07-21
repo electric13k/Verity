@@ -1,0 +1,8 @@
+# Generated certs + keys are SECRETS — never commit them. Only the tooling
+# (gen-certs.sh, WIRING.md, README.md) is tracked.
+out/
+*.key
+*.crt
+*.csr
+*.srl
+*.ext

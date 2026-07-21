@@ -1,0 +1,198 @@
+# Verity v2 — Stage B/C production topology (plan §1, §2).
+#
+# Realizes the approved public/private subnet split as Docker networks:
+#
+#   internet ──▶ [public]  gateway  (ONLY service that publishes a port)
+#                             │
+#                             ▼  (gateway dials brain/core by name)
+#                          [private, internal:true]  ← no route to/from internet
+#                             brain · core · node · postgres · redis · qdrant · cognee
+#                             (ZERO published ports — unreachable from host/internet)
+#                             │
+#                             ▼  (outbound only, no inbound, NAT-equivalent)
+#                          [egress]  brain · core · node · cognee
+#                             → reach LLM providers, managed Postgres, Ollama Cloud
+#
+# WHY egress exists: `internal: true` on `private` blocks ALL internet traffic
+# (in AND out). A real private subnet has no *inbound* public IP but keeps
+# *outbound* via a NAT gateway — brain must reach Anthropic/OpenAI, core/brain
+# a managed Postgres (Stage B), cognee its embedding model. The `egress` bridge
+# provides exactly that: outbound-only, and since nothing publishes a port on
+# it, still unreachable from the internet inbound. Data stores (postgres/redis/
+# qdrant) stay on `private` ONLY — they never need egress.
+#
+# LAWS honored here:
+#   - Boot degrades, never dies: every app env var below is optional (empty
+#     default); no `depends_on` gates app startup on another service's HEALTH,
+#     only on start order. Optional tiers (data, compute) are behind profiles.
+#   - No secrets in this file: values come from ${VAR} only; see
+#     infra/docker/.env.prod.example for the (placeholder) variable list.
+#   - The private network publishes ZERO ports (grep proves it — see
+#     infra/ci/docker_lint.sh).
+#
+# Usage:
+#   cp infra/docker/.env.prod.example infra/docker/.env.prod   # then fill it
+#   docker compose -f infra/docker/compose.prod.yaml --env-file infra/docker/.env.prod up -d
+#   # self-hosted data plane instead of managed services:
+#   #   ... --profile data up -d
+#   # compute node daemon (M7):
+#   #   ... --profile data --profile compute up -d
+name: verity-prod
+
+x-app-restart: &app-restart
+  restart: unless-stopped
+
+networks:
+  # Internet-facing. Only the gateway attaches; only the gateway publishes.
+  public:
+    driver: bridge
+  # Service mesh + data plane. internal:true => no route to/from the internet.
+  private:
+    driver: bridge
+    internal: true
+  # Outbound-only path for app services (no published ports => no inbound).
+  egress:
+    driver: bridge
+
+volumes:
+  pg_data:
+  redis_data:
+  qdrant_data:
+  cognee_data:
+
+services:
+  # ---- PUBLIC tier --------------------------------------------------------
+  # The only internet-facing service. TLS + WAF + rate limiting live in front
+  # of it at Cloudflare (see infra/cloudflare/); the origin speaks plaintext
+  # HTTP on 8080 and should sit behind a Cloudflare Tunnel (cloudflared) or an
+  # LB holding a Cloudflare Origin CA cert. Bind to 127.0.0.1 when using a
+  # cloudflared sidecar so the port is not exposed on the host at all.
+  gateway:
+    image: verity/gateway:${VERITY_TAG:-latest}
+    build:
+      context: ../..
+      dockerfile: services/gateway/Dockerfile
+    environment:
+      GATEWAY_ADDR: 0.0.0.0:8080
+      # Service-mesh dial targets resolve by name on the private network.
+      BRAIN_GRPC_ADDR: brain:9100
+      CORE_GRPC_ADDR: core:9200
+      REDIS_URL: ${REDIS_URL:-redis://redis:6379}
+      # Clerk JWT verification (fetched over the internet via the public net).
+      CLERK_JWKS_URL: ${CLERK_JWKS_URL:-}
+      CLERK_ISSUER: ${CLERK_ISSUER:-}
+      VERITY_ALLOWED_ORIGINS: ${VERITY_ALLOWED_ORIGINS:-}
+      VERITY_DEV_MODE: "0"
+    ports:
+      # host:container — the ONLY published port in this whole file.
+      - "${GATEWAY_BIND:-0.0.0.0}:${GATEWAY_PORT:-8080}:8080"
+    networks: [public, private]
+    depends_on: [brain, core]
+    <<: *app-restart
+
+  # ---- PRIVATE tier: app services ----------------------------------------
+  brain:
+    image: verity/brain:${VERITY_TAG:-latest}
+    build:
+      context: ../../services/brain
+      dockerfile: Dockerfile
+    environment:
+      BRAIN_GRPC_ADDR: 0.0.0.0:9100        # reachable by gateway on private
+      DATABASE_URL: ${DATABASE_URL:-}      # managed PG (Stage B) or private pg
+      REDIS_URL: ${REDIS_URL:-redis://redis:6379}
+      CORE_GRPC_ADDR: core:9200
+      QDRANT_URL: ${QDRANT_URL:-http://qdrant:6333}
+      COGNEE_URL: ${COGNEE_URL:-}
+      ENCRYPTION_KEY: ${ENCRYPTION_KEY:-}  # AES-256-GCM key for provider secrets
+      OLLAMA_CLOUD_API_KEY: ${OLLAMA_CLOUD_API_KEY:-}
+      VERITY_COGNEE: ${VERITY_COGNEE:-0}
+      COGNEE_LLM_PROVIDER: ${COGNEE_LLM_PROVIDER:-}
+      COGNEE_LLM_MODEL: ${COGNEE_LLM_MODEL:-}
+      COGNEE_LLM_API_KEY: ${COGNEE_LLM_API_KEY:-}
+    networks: [private, egress]            # egress: reach LLM providers / managed PG
+    <<: *app-restart
+
+  core:
+    image: verity/core:${VERITY_TAG:-latest}
+    build:
+      context: ../..
+      dockerfile: services/core/Dockerfile
+    environment:
+      CORE_HTTP_ADDR: 0.0.0.0:8200
+      CORE_GRPC_ADDR: 0.0.0.0:9200         # reachable by gateway/brain on private
+      QDRANT_URL: ${QDRANT_URL:-http://qdrant:6333}
+      DATABASE_URL: ${DATABASE_URL:-}      # coordinator ledger (degrades if unset)
+    networks: [private, egress]            # egress: managed PG / remote Qdrant
+    <<: *app-restart
+
+  # Compute node daemon (M7) — OPTIONAL, off by default (profile: compute).
+  # Pure gRPC client; dials the coordinator (core) — note the http:// scheme.
+  node:
+    image: verity/node:${VERITY_TAG:-latest}
+    build:
+      context: ../..
+      dockerfile: services/node/Dockerfile
+    environment:
+      NODE_HTTP_ADDR: 0.0.0.0:8300
+      COORDINATOR_GRPC_ADDR: ${COORDINATOR_GRPC_ADDR:-http://core:9200}
+      VERITY_OWNER_ID: ${VERITY_OWNER_ID:-}   # idles until set (boot-degrades)
+      OLLAMA_HOST: ${OLLAMA_HOST:-}
+      NODE_NAME: ${NODE_NAME:-verity-node}
+    networks: [private, egress]
+    profiles: ["compute"]
+    <<: *app-restart
+
+  # ---- PRIVATE tier: data plane (profile: data) --------------------------
+  # Self-hosted alternative to managed services. Enable with `--profile data`.
+  # In Stage B the recommended path is MANAGED Postgres/Redis/Qdrant — point
+  # DATABASE_URL/REDIS_URL/QDRANT_URL at them and leave this profile off.
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-verity}
+      # Required when self-hosting the DB — no default, no secret in this file.
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env.prod when using --profile data}
+      POSTGRES_DB: ${POSTGRES_DB:-verity}
+    volumes:
+      - pg_data:/var/lib/postgresql/data
+    networks: [private]
+    profiles: ["data"]
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-verity}"]
+      interval: 10s
+      timeout: 3s
+      retries: 10
+    <<: *app-restart
+
+  redis:
+    image: redis:7-alpine
+    command: ["redis-server", "--appendonly", "yes"]
+    volumes:
+      - redis_data:/data
+    networks: [private]
+    profiles: ["data"]
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 10
+    <<: *app-restart
+
+  qdrant:
+    image: qdrant/qdrant:latest
+    volumes:
+      - qdrant_data:/qdrant/storage
+    networks: [private]
+    profiles: ["data"]
+    <<: *app-restart
+
+  cognee:
+    image: cognee/cognee:main
+    environment:
+      DB_PROVIDER: sqlite
+      VECTOR_DB_PROVIDER: lancedb
+    volumes:
+      - cognee_data:/app/.cognee_system
+    networks: [private, egress]            # egress: cognee calls its LLM/embeddings
+    profiles: ["data"]
+    <<: *app-restart

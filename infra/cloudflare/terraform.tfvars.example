@@ -1,0 +1,17 @@
+# Copy to terraform.tfvars and fill. NO secrets here — the API token is passed
+# via env: export CLOUDFLARE_API_TOKEN=...  (never commit it).
+#
+#   cp terraform.tfvars.example terraform.tfvars
+#   export CLOUDFLARE_API_TOKEN=...    # scoped token, user-supplied
+#   terraform init && terraform plan   # apply is user-gated (Stage C)
+
+zone_id            = "REPLACE_WITH_ZONE_ID"
+account_id         = "REPLACE_WITH_ACCOUNT_ID"
+api_hostname       = "api.verity.example"
+app_hostname       = "app.verity.example"
+pages_project_name = "verity-web"
+
+# Optional: connect Pages to a GitHub repo (blank = direct-upload/CI deploy).
+github_owner      = ""
+github_repo       = ""
+production_branch = "main"

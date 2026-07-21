@@ -1,0 +1,24 @@
+# Cloudflare Pages `_headers` template — the enforced production CSP + security
+# header set (plan §2 L1). This is the ALTERNATIVE to the edge response-header
+# transform in pages.tf; use ONE of the two, not both.
+#
+# The apps/web owner (this file is NOT to be edited into apps/web by the infra
+# pass) copies this to `apps/web/public/_headers` and replaces
+# API_HOSTNAME_PLACEHOLDER with the real gateway host. Next's static export
+# copies everything under public/ into `out/`, so Pages serves it verbatim.
+#
+# CSP notes:
+#   - script-src 'self' only — no inline/eval; Next static export needs no
+#     inline bootstrap when hydration scripts are emitted as files.
+#   - style-src allows 'unsafe-inline' for styled-jsx/Tailwind runtime styles.
+#   - connect-src carries the gateway (https + wss for SSE/WS) and Clerk.
+#   - frame-ancestors 'none' + base-uri 'self' per §2.
+
+/*
+  Content-Security-Policy: default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; connect-src 'self' https://API_HOSTNAME_PLACEHOLDER wss://API_HOSTNAME_PLACEHOLDER https://*.clerk.accounts.dev; img-src 'self' data: blob:; font-src 'self'; frame-ancestors 'none'; base-uri 'self'
+  Strict-Transport-Security: max-age=63072000; includeSubDomains; preload
+  X-Content-Type-Options: nosniff
+  Referrer-Policy: strict-origin-when-cross-origin
+  X-Frame-Options: DENY
+  Permissions-Policy: camera=(), microphone=(), geolocation=(), interest-cohort=()
+  Cross-Origin-Opener-Policy: same-origin
