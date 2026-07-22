@@ -73,6 +73,12 @@ class RedisQueue(JobQueue):
         self._handler: Handler | None = None
         self._tasks: list[asyncio.Task] = []
         self._running = False
+        # Cooperative-shutdown signal. Workers/reaper poll on this instead of a
+        # bare sleep so stop() can drain in-flight jobs to completion rather
+        # than hard-cancelling a task mid-Redis-operation (which can leave the
+        # connection wedged, and deadlocks fakeredis in tests). Constructed here
+        # (no running loop needed in 3.10+); set by stop().
+        self._stop_event = asyncio.Event()
 
     # --- lifecycle ---------------------------------------------------------
 
@@ -90,6 +96,7 @@ class RedisQueue(JobQueue):
         await self._ensure_client()
         self._handler = handler
         self._running = True
+        self._stop_event.clear()
         self._tasks = [
             asyncio.create_task(self._worker_loop(i), name=f"redis-worker-{i}")
             for i in range(self._n)
@@ -97,13 +104,28 @@ class RedisQueue(JobQueue):
         self._tasks.append(asyncio.create_task(self._reaper_loop(), name="redis-reaper"))
         log.info("redis queue started workers=%d cap=%d", self._n, self._gate.cap)
 
-    async def stop(self) -> None:
+    async def stop(self, grace: float = 5.0) -> None:
+        """Graceful shutdown: signal the loops to exit at a safe point (between
+        jobs, not mid-Redis-op) and let in-flight jobs finish. Only a straggler
+        still running after `grace` is hard-cancelled — so a well-behaved job is
+        never interrupted mid-operation."""
         self._running = False
-        for t in self._tasks:
-            t.cancel()
+        self._stop_event.set()
         if self._tasks:
-            await asyncio.gather(*self._tasks, return_exceptions=True)
+            done, pending = await asyncio.wait(self._tasks, timeout=grace)
+            for t in pending:  # a genuinely stuck task (e.g. a hung handler)
+                t.cancel()
+            if pending:
+                await asyncio.gather(*pending, return_exceptions=True)
         self._tasks = []
+
+    async def _sleep_or_stop(self, timeout: float) -> None:
+        """Sleep up to `timeout`, waking immediately on shutdown. Never lets a
+        CancelledError-free stop hang on a long poll/reap interval."""
+        try:
+            await asyncio.wait_for(self._stop_event.wait(), timeout)
+        except asyncio.TimeoutError:
+            pass
 
     # --- enqueue -----------------------------------------------------------
 
@@ -206,7 +228,7 @@ class RedisQueue(JobQueue):
     # --- loops -------------------------------------------------------------
 
     async def _worker_loop(self, i: int) -> None:
-        while True:
+        while self._running:
             try:
                 job = await self._claim()
             except asyncio.CancelledError:
@@ -215,13 +237,17 @@ class RedisQueue(JobQueue):
                 log.warning("claim failed: %s", exc)
                 job = None
             if job is None:
-                await asyncio.sleep(self._poll)
+                await self._sleep_or_stop(self._poll)
                 continue
+            # A job claimed just as shutdown begins still runs to completion —
+            # at-least-once favours finishing over abandoning in-flight work.
             await self._run_job(job)
 
     async def _reaper_loop(self) -> None:
-        while True:
-            await asyncio.sleep(self._reap_interval)
+        while self._running:
+            await self._sleep_or_stop(self._reap_interval)
+            if not self._running:
+                break
             try:
                 n = await self._reap()
                 if n:
