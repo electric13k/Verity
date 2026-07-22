@@ -5,7 +5,7 @@
 // The gateway strict-decodes the body, so we send only the four fields it
 // accepts: task, flow_kind, model, workers.
 
-import { apiUrl } from "./config";
+import { apiUrl, authHeaders } from "./config";
 import { readSSE } from "./sse";
 import type { FlowPhase, FlowRequest, FlowStreamHandlers } from "./types";
 
@@ -22,7 +22,7 @@ export async function flowStream(
   try {
     res = await fetch(apiUrl("/v1/flows"), {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: { "Content-Type": "application/json", ...authHeaders() },
       body: JSON.stringify({
         task: req.task,
         ...(req.flow_kind ? { flow_kind: req.flow_kind } : {}),

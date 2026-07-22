@@ -25,6 +25,7 @@ import {
 import { PLATFORM_NOTICE } from "./api/config";
 import { MODEL_CATALOG } from "./api/mock";
 import { createStreamBuffer, type StreamBuffer } from "./stream-buffer";
+import { optimistic } from "./optimistic";
 import {
   bandForScore,
   type BranchKind,
@@ -45,8 +46,20 @@ const prefersReducedMotion = () =>
 const DEFAULT_SELECTOR = "echo:echo";
 const now = () => new Date().toISOString();
 
+// A quiet, app-wide notice — used by optimistic rollbacks to say what failed
+// without a modal or a red wall. One at a time; a new one replaces the last.
+export type ToastTone = "error" | "info";
+export interface Toast {
+  id: number;
+  message: string;
+  tone: ToastTone;
+}
+
 interface AppStore {
   mockNotice: string;
+  toast: Toast | null;
+  notify: (message: string, tone?: ToastTone) => void;
+  dismissToast: () => void;
   me: Me | null;
   models: ModelOption[];
   selector: string;
@@ -86,6 +99,20 @@ export function AppProviders({ children }: { children: React.ReactNode }) {
   const [currentId, setCurrentId] = useState<string | null>(null);
   const [messages, setMessages] = useState<Message[]>([]);
   const [streaming, setStreaming] = useState(false);
+  const [toast, setToast] = useState<Toast | null>(null);
+
+  // Quiet notice: replaces any current one and auto-clears. Rollbacks call this
+  // so a failed optimistic write says what happened, calmly, then fades.
+  const toastTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const notify = useCallback((message: string, tone: ToastTone = "error") => {
+    if (toastTimer.current) clearTimeout(toastTimer.current);
+    setToast({ id: Date.now(), message, tone });
+    toastTimer.current = setTimeout(() => setToast(null), 4200);
+  }, []);
+  const dismissToast = useCallback(() => {
+    if (toastTimer.current) clearTimeout(toastTimer.current);
+    setToast(null);
+  }, []);
 
   const abortRef = useRef<AbortController | null>(null);
   const streamBufRef = useRef<StreamBuffer | null>(null);
@@ -367,21 +394,49 @@ export function AppProviders({ children }: { children: React.ReactNode }) {
 
   const renameConversation = useCallback(
     async (id: string, title: string) => {
-      await api.renameConversation(id, title);
-      setConversations((prev) => prev.map((c) => (c.id === id ? { ...c, title } : c)));
-      refreshList();
+      // Snapshot the old title so a failed rename can be put back exactly.
+      const prevTitle = conversations.find((c) => c.id === id)?.title;
+      await optimistic({
+        apply: () =>
+          setConversations((prev) => prev.map((c) => (c.id === id ? { ...c, title } : c))),
+        commit: () => api.renameConversation(id, title),
+        reconcile: () => refreshList(),
+        rollback: () =>
+          setConversations((prev) =>
+            prev.map((c) => (c.id === id && prevTitle != null ? { ...c, title: prevTitle } : c)),
+          ),
+        onError: () => notify("Couldn't rename that conversation. Its title was put back."),
+      });
     },
-    [refreshList],
+    [conversations, refreshList, notify],
   );
 
   const deleteConversation = useCallback(
     async (id: string) => {
-      await api.deleteConversation(id);
-      if (currentIdRef.current === id) newConversation();
-      setConversations((prev) => prev.filter((c) => c.id !== id));
-      refreshList();
+      // Snapshot the row and its position so a failed delete restores it in place.
+      const idx = conversations.findIndex((c) => c.id === id);
+      const removed = idx >= 0 ? conversations[idx] : null;
+      const wasCurrent = currentIdRef.current === id;
+      await optimistic({
+        apply: () => {
+          if (wasCurrent) newConversation();
+          setConversations((prev) => prev.filter((c) => c.id !== id));
+        },
+        commit: () => api.deleteConversation(id),
+        reconcile: () => refreshList(),
+        rollback: () => {
+          if (removed)
+            setConversations((prev) => {
+              if (prev.some((c) => c.id === id)) return prev;
+              const next = [...prev];
+              next.splice(Math.min(idx, next.length), 0, removed);
+              return next;
+            });
+        },
+        onError: () => notify("Couldn't delete that conversation. It's been restored."),
+      });
     },
-    [refreshList, newConversation],
+    [conversations, refreshList, newConversation, notify],
   );
 
   const branch = useCallback(async (messageId: string, kind: BranchKind) => {
@@ -398,6 +453,9 @@ export function AppProviders({ children }: { children: React.ReactNode }) {
   const value = useMemo<AppStore>(
     () => ({
       mockNotice: PLATFORM_NOTICE,
+      toast,
+      notify,
+      dismissToast,
       me,
       models: MODEL_CATALOG,
       selector,
@@ -422,6 +480,7 @@ export function AppProviders({ children }: { children: React.ReactNode }) {
       branch,
     }),
     [
+      toast, notify, dismissToast,
       me, selector, useMemory, conversations, convCursor, loadingConversations,
       loadMoreConversations, currentId, messages, streaming,
       newConversation, selectConversation, renameConversation, deleteConversation,

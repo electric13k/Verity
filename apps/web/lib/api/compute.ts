@@ -3,7 +3,7 @@
 // gateway returns 202 with {job_id, work_unit_id}. Network stats (credits,
 // nodes) are mock until the ledger is exposed.
 
-import { apiUrl } from "./config";
+import { apiUrl, authHeaders } from "./config";
 import type { ComputeJobRequest, ComputeJobResult } from "./types";
 
 export async function submitComputeJob(
@@ -14,7 +14,7 @@ export async function submitComputeJob(
   try {
     res = await fetch(apiUrl("/v1/compute/jobs"), {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: { "Content-Type": "application/json", ...authHeaders() },
       body: JSON.stringify({ model: req.model, prompt: req.prompt }),
       signal,
     });

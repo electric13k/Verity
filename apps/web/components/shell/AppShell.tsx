@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { List } from "@phosphor-icons/react";
 import { Sidebar } from "./Sidebar";
+import { Toast } from "./Toast";
 import { Modal } from "@/components/glass/Modal";
 
 // Two-pane shell: a floating glass rail (the sidebar) over the ambient mesh,
@@ -35,6 +36,8 @@ export function AppShell({ children }: { children: React.ReactNode }) {
       </Modal>
 
       <main className="app-shell__main">{children}</main>
+
+      <Toast />
     </div>
   );
 }

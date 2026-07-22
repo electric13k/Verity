@@ -9,7 +9,7 @@
 // │  only keyed providers). client.ts chooses this OR the mock exactly once.│
 // └──────────────────────────────────────────────────────────────────────┘
 
-import { apiUrl } from "./config";
+import { apiUrl, authHeaders } from "./config";
 import {
   bandForScore,
   type BranchKind,
@@ -53,7 +53,9 @@ async function gwError(res: Response): Promise<GatewayError> {
 }
 
 async function getJSON<T>(path: string): Promise<T> {
-  const res = await fetch(apiUrl(path), { headers: { Accept: "application/json" } });
+  const res = await fetch(apiUrl(path), {
+    headers: { Accept: "application/json", ...authHeaders() },
+  });
   if (!res.ok) throw await gwError(res);
   return (await res.json()) as T;
 }
@@ -61,7 +63,10 @@ async function getJSON<T>(path: string): Promise<T> {
 async function sendJSON<T>(method: string, path: string, body?: unknown): Promise<T> {
   const res = await fetch(apiUrl(path), {
     method,
-    headers: body === undefined ? undefined : { "Content-Type": "application/json" },
+    headers: {
+      ...(body === undefined ? {} : { "Content-Type": "application/json" }),
+      ...authHeaders(),
+    },
     body: body === undefined ? undefined : JSON.stringify(body),
   });
   if (!res.ok) throw await gwError(res);
@@ -327,7 +332,11 @@ export const live: PlatformApi = {
   async upload(file: File): Promise<UploadResult> {
     const form = new FormData();
     form.append("file", file, file.name);
-    const res = await fetch(apiUrl("/v1/upload"), { method: "POST", body: form });
+    const res = await fetch(apiUrl("/v1/upload"), {
+      method: "POST",
+      headers: { ...authHeaders() },
+      body: form,
+    });
     if (!res.ok) throw await gwError(res);
     const r = (await res.json()) as { file_id: string; name: string; markdown_bytes: number };
     return {

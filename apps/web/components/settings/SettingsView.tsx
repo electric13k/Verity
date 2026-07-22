@@ -5,6 +5,8 @@ import { Info, ShieldCheck } from "@phosphor-icons/react";
 import { Panel } from "@/components/glass/Panel";
 import { api } from "@/lib/api/client";
 import { IS_MOCK } from "@/lib/api/config";
+import { optimistic } from "@/lib/optimistic";
+import { useApp } from "@/lib/store";
 import type { ProviderKeyInfo } from "@/lib/api/types";
 import { ProviderKeyRow } from "./ProviderKeyRow";
 
@@ -14,6 +16,7 @@ import { ProviderKeyRow } from "./ProviderKeyRow";
 
 export function SettingsView() {
   const [keys, setKeys] = useState<ProviderKeyInfo[] | null>(null);
+  const { notify } = useApp();
 
   const refresh = useCallback(() => {
     api.getProviderKeys().then(setKeys);
@@ -21,15 +24,33 @@ export function SettingsView() {
 
   useEffect(() => { refresh(); }, [refresh]);
 
+  // Flip the row to "Configured" the instant the key is sent — the material
+  // itself is never held here, only the fact that a key now exists. If the vault
+  // rejects it, the row falls back to "Not set" and a quiet notice explains.
+  const setConfigured = (provider: string, configured: boolean) =>
+    setKeys((prev) =>
+      prev ? prev.map((k) => (k.id === provider ? { ...k, configured } : k)) : prev,
+    );
+
   const save = useCallback(async (provider: string, key: string) => {
-    await api.putProviderKey(provider, key);
-    refresh();
-  }, [refresh]);
+    await optimistic({
+      apply: () => setConfigured(provider, true),
+      commit: () => api.putProviderKey(provider, key),
+      reconcile: () => refresh(),
+      rollback: () => setConfigured(provider, false),
+      onError: () => notify("Couldn't save that key. Nothing was stored."),
+    });
+  }, [refresh, notify]);
 
   const remove = useCallback(async (provider: string) => {
-    await api.deleteProviderKey(provider);
-    refresh();
-  }, [refresh]);
+    await optimistic({
+      apply: () => setConfigured(provider, false),
+      commit: () => api.deleteProviderKey(provider),
+      reconcile: () => refresh(),
+      rollback: () => setConfigured(provider, true),
+      onError: () => notify("Couldn't remove that key. It's still configured."),
+    });
+  }, [refresh, notify]);
 
   return (
     <div className="flow">

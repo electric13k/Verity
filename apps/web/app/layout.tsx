@@ -5,6 +5,7 @@ import "@fontsource-variable/fraunces";
 import "./globals.css";
 
 import { ThemeProvider } from "@/components/shell/ThemeProvider";
+import { AuthProvider } from "@/lib/auth";
 import { AmbientMesh } from "@/components/background/AmbientMesh";
 import { PWARegister } from "@/components/pwa/PWARegister";
 
@@ -47,9 +48,11 @@ export default function RootLayout({
       </head>
       <body>
         <ThemeProvider>
-          <AmbientMesh />
-          {children}
-          <PWARegister />
+          <AuthProvider>
+            <AmbientMesh />
+            {children}
+            <PWARegister />
+          </AuthProvider>
         </ThemeProvider>
       </body>
     </html>

@@ -11,6 +11,8 @@ import { Skeleton } from "@/components/glass/Skeleton";
 import { api } from "@/lib/api/client";
 import { IS_MOCK } from "@/lib/api/config";
 import { consumeHandoff } from "@/lib/handoff";
+import { optimistic } from "@/lib/optimistic";
+import { useApp } from "@/lib/store";
 import type { Office, OfficeInput, OfficeRun } from "@/lib/api/types";
 import { STATUS_META, humanizeCron } from "./status";
 import { OfficeForm } from "./OfficeForm";
@@ -90,6 +92,7 @@ export function OfficesView() {
   const [initialBrief, setInitialBrief] = useState("");
   const [busyId, setBusyId] = useState<string | null>(null);
   const [openRun, setOpenRun] = useState<OfficeRun | null>(null);
+  const { notify } = useApp();
 
   const refresh = useCallback(() => {
     api.listOffices().then(setOffices);
@@ -107,30 +110,68 @@ export function OfficesView() {
 
   const create = useCallback(
     async (input: OfficeInput) => {
-      await api.createOffice(input);
+      // The office appears at the top of the list the instant Create is pressed,
+      // under a temporary id, then reconciles to the server's row (real id).
+      const tempId = `tmp_${Date.now().toString(36)}`;
+      const temp: Office = {
+        id: tempId,
+        name: input.name.trim() || "Untitled office",
+        schedule: input.schedule.trim(),
+        brief: input.brief.trim(),
+        flow_kind: input.flow_kind,
+        workers: input.workers,
+        status: input.schedule.trim() ? "scheduled" : "idle",
+        updated_at: new Date().toISOString(),
+      };
       setCreating(false);
       setInitialBrief("");
-      refresh();
+      await optimistic({
+        apply: () => setOffices((prev) => [temp, ...(prev ?? [])]),
+        commit: () => api.createOffice(input),
+        reconcile: (created) =>
+          setOffices((prev) =>
+            prev ? prev.map((o) => (o.id === tempId ? created : o)) : [created],
+          ),
+        rollback: () =>
+          setOffices((prev) => (prev ? prev.filter((o) => o.id !== tempId) : prev)),
+        onError: () => notify("Couldn't create that office. Nothing was saved."),
+      });
     },
-    [refresh],
+    [notify],
   );
 
-  // Running an office kicks off a background run (202 → run_id). Open its run
-  // detail immediately; a polling effect below follows it to completion.
+  // Running an office kicks off a background run (202 → run_id). The card flips
+  // to "running" instantly; a polling effect below follows it to completion.
   const run = useCallback(async (office: Office) => {
+    const prevStatus = office.status;
+    const setStatus = (status: Office["status"]) =>
+      setOffices((prev) =>
+        prev ? prev.map((o) => (o.id === office.id ? { ...o, status } : o)) : prev,
+      );
     setBusyId(office.id);
-    const { run_id } = await api.runOffice(office.id);
+    const { run_id } = await optimistic({
+      apply: () => setStatus("running"),
+      commit: () => api.runOffice(office.id),
+      rollback: () => setStatus(prevStatus),
+      onError: () => notify("Couldn't start that run. The office is unchanged."),
+    }) ?? { run_id: "" };
     setBusyId(null);
     if (run_id) {
       const detail = await api.getOfficeRun(office.id, run_id);
       if (detail) setOpenRun({ ...detail, office_name: office.name });
-      // Remember the run in-session so "Last run" reopens it (the office list
-      // route carries no last-run pointer).
+      // Remember the run in-session so "Last run" reopens it, and settle the
+      // card to the run's real status (the list route carries no run pointer).
       setOffices((prev) =>
-        prev ? prev.map((o) => (o.id === office.id ? { ...o, last_run_id: run_id } : o)) : prev,
+        prev
+          ? prev.map((o) =>
+              o.id === office.id
+                ? { ...o, last_run_id: run_id, status: detail?.status ?? o.status }
+                : o,
+            )
+          : prev,
       );
     }
-  }, []);
+  }, [notify]);
 
   const openLast = useCallback(async (office: Office) => {
     if (!office.last_run_id) return;
@@ -153,11 +194,21 @@ export function OfficesView() {
   }, [openRun]);
 
   const remove = useCallback(async (id: string) => {
-    // No DELETE route (platform.go) — drop it locally so the action reads true
-    // in-session; a reload re-lists it in live mode.
-    setOffices((prev) => (prev ? prev.filter((o) => o.id !== id) : prev));
-    await api.deleteOffice(id);
-  }, []);
+    // The card leaves the list immediately. (No DELETE route exists server-side
+    // yet, so in live mode a reload re-lists it; the mock removes it for real.)
+    // A failed call restores the card in place with a quiet notice.
+    let snapshot: Office[] = [];
+    await optimistic({
+      apply: () =>
+        setOffices((prev) => {
+          snapshot = prev ?? [];
+          return prev ? prev.filter((o) => o.id !== id) : prev;
+        }),
+      commit: () => api.deleteOffice(id),
+      rollback: () => setOffices(snapshot),
+      onError: () => notify("Couldn't delete that office. It's been restored."),
+    });
+  }, [notify]);
 
   return (
     <div className="flow">

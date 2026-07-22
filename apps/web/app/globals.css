@@ -1271,6 +1271,206 @@ body {
   .attach-chip__x:hover { background: rgb(var(--glass-tint) / 0.8); color: var(--v-ink); }
 }
 
+@layer components {
+  /* ================================================================ *
+   * AUTH — the gate's editorial split: the atelier line beside the one
+   * glass auth card (the single glowing surface in the view). Supabase
+   * email/password + one OAuth provider, all in the workspace register.
+   * ================================================================ */
+  .auth {
+    display: flex;
+    height: 100dvh;
+    width: 100%;
+    overflow-y: auto;
+    padding: var(--v-space-5) var(--v-space-4);
+  }
+  .auth__stage {
+    margin: auto;
+    width: 100%;
+    max-width: 62rem;
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: var(--v-space-6);
+    align-items: center;
+  }
+  .auth__aside { display: none; }
+  .auth__wordmark {
+    font-size: clamp(2.5rem, 5vw, 3.5rem);
+    line-height: 1;
+    letter-spacing: -0.02em;
+    margin: var(--v-space-3) 0 0;
+  }
+  .auth__lede {
+    font-size: 1.0625rem;
+    line-height: 1.6;
+    color: color-mix(in oklab, var(--v-ink) 68%, transparent);
+    margin: var(--v-space-4) 0 var(--v-space-5);
+    max-width: 34ch;
+  }
+  .auth__points { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: var(--v-space-3); }
+  .auth__points li {
+    position: relative; padding-left: var(--v-space-4);
+    font-size: 0.9375rem; line-height: 1.5;
+    color: color-mix(in oklab, var(--v-ink) 76%, transparent);
+  }
+  .auth__points li::before {
+    content: ""; position: absolute; left: 0; top: 0.55em;
+    width: 6px; height: 6px; border-radius: 999px; background: var(--v-brass);
+  }
+
+  .auth__card {
+    width: 100%;
+    max-width: 27rem;
+    margin: 0 auto;
+    padding: var(--v-space-5);
+    display: flex;
+    flex-direction: column;
+    gap: var(--v-space-4);
+  }
+  .auth__tabs {
+    display: flex;
+    gap: var(--v-space-4);
+    border-bottom: 1px solid rgb(var(--hairline) / 0.18);
+  }
+  .auth__tab {
+    padding: 0 0 var(--v-space-2);
+    margin-bottom: -1px;
+    background: transparent;
+    border: 0;
+    border-bottom: 2px solid transparent;
+    cursor: pointer;
+    font-family: var(--v-font-body);
+    font-size: 0.9375rem;
+    font-weight: 500;
+    color: color-mix(in oklab, var(--v-ink) 50%, transparent);
+    transition: color var(--v-motion-fast) var(--v-motion-ease), border-color var(--v-motion-fast) var(--v-motion-ease);
+  }
+  .auth__tab:hover { color: color-mix(in oklab, var(--v-ink) 78%, transparent); }
+  .auth__tab--on { color: var(--v-ink); border-bottom-color: var(--v-brass); }
+
+  .auth__title { font-size: 1.5rem; line-height: 1.15; margin: 0; }
+  .auth__form { display: flex; flex-direction: column; gap: var(--v-space-4); }
+  .auth__form .field-row + .field-row { margin-top: 0; }
+
+  .auth__password { position: relative; }
+  .auth__password .gfield { padding-right: 2.4rem; }
+  .auth__reveal {
+    position: absolute; right: 0.5rem; top: 50%; transform: translateY(-50%);
+    display: inline-flex; border: 0; background: transparent; cursor: pointer; padding: 4px;
+    color: color-mix(in oklab, var(--v-ink) 50%, transparent);
+    transition: color var(--v-motion-fast) var(--v-motion-ease);
+  }
+  .auth__reveal:hover { color: var(--v-ink); }
+  .auth__forgot {
+    align-self: flex-end;
+    margin-top: var(--v-space-1);
+    background: transparent; border: 0; cursor: pointer;
+    font-family: var(--v-font-body); font-size: 0.8125rem;
+    color: var(--v-matcha);
+  }
+  .auth__forgot:hover { text-decoration: underline; text-underline-offset: 2px; }
+
+  .auth__error, .auth__notice {
+    display: flex; align-items: center; gap: 0.5ch;
+    font-size: 0.8438rem; line-height: 1.45; margin: 0;
+  }
+  .auth__error { color: var(--v-oxblood); }
+  .auth__error svg { flex: none; }
+  .auth__notice { color: var(--v-matcha); }
+  .auth__notice svg { flex: none; }
+
+  .auth__submit { width: 100%; margin-top: var(--v-space-1); }
+
+  .auth__or { display: flex; align-items: center; gap: var(--v-space-3); }
+  .auth__or .hairline { flex: 1; }
+  .auth__or-label {
+    font-family: var(--v-font-mono); font-size: 0.6875rem; letter-spacing: 0.1em;
+    text-transform: uppercase; color: color-mix(in oklab, var(--v-ink) 42%, transparent);
+  }
+  .auth__oauth { width: 100%; }
+
+  .auth__switch {
+    text-align: center; margin: 0;
+    font-size: 0.875rem;
+    color: color-mix(in oklab, var(--v-ink) 60%, transparent);
+  }
+  .auth__switch button {
+    background: transparent; border: 0; cursor: pointer; padding: 0;
+    font: inherit; color: var(--v-matcha);
+  }
+  .auth__switch button:hover { text-decoration: underline; text-underline-offset: 2px; }
+
+  @media (min-width: 880px) {
+    .auth__stage { grid-template-columns: 1.05fr 0.95fr; gap: var(--v-space-6); }
+    .auth__aside { display: flex; flex-direction: column; }
+    .auth__card { margin: 0; }
+  }
+
+  /* Hydration hold — a calm wordmark while the session resolves, no spinner. */
+  .auth-hold {
+    position: fixed; inset: 0;
+    display: flex; flex-direction: column; align-items: center; justify-content: center;
+    gap: var(--v-space-4);
+  }
+  .auth-hold__mark { font-size: 2rem; letter-spacing: -0.02em; color: var(--v-ink); }
+
+  /* ================================================================ *
+   * ACCOUNT ROW — the signed-in identity in the sidebar foot.
+   * ================================================================ */
+  .account-row {
+    display: flex; align-items: center; gap: var(--v-space-2);
+    margin-bottom: var(--v-space-3);
+    padding-left: var(--v-space-1);
+  }
+  .account-row__avatar {
+    display: inline-grid; place-items: center; flex: none;
+    width: 1.9rem; height: 1.9rem; border-radius: 999px;
+    font-family: var(--v-font-mono); font-size: 0.625rem; letter-spacing: 0.04em;
+    color: var(--v-ink);
+    background: color-mix(in oklab, var(--v-matcha) 20%, rgb(var(--glass-tint) / 0.6));
+    border: 1px solid rgb(var(--hairline) / 0.34);
+  }
+  .account-row__email {
+    flex: 1; min-width: 0;
+    overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+    font-size: 0.8125rem;
+    color: color-mix(in oklab, var(--v-ink) 74%, transparent);
+  }
+  .account-row__out {
+    display: inline-flex; flex: none; border: 0; background: transparent; cursor: pointer;
+    padding: 5px; border-radius: var(--v-radius-sm);
+    color: color-mix(in oklab, var(--v-ink) 50%, transparent);
+    transition: color var(--v-motion-fast) var(--v-motion-ease), background-color var(--v-motion-fast) var(--v-motion-ease);
+  }
+  .account-row__out:hover { color: var(--v-ink); background: rgb(var(--glass-tint) / 0.6); }
+
+  /* ================================================================ *
+   * TOAST — the app's one quiet notice (optimistic rollbacks).
+   * ================================================================ */
+  .v-toast {
+    position: fixed;
+    bottom: var(--v-space-5);
+    left: 50%;
+    transform: translateX(-50%);
+    z-index: 60;
+    display: flex; align-items: center; gap: var(--v-space-2);
+    max-width: min(92vw, 30rem);
+    padding: 0.6rem var(--v-space-3);
+    border-radius: var(--v-radius-lg);
+  }
+  .v-toast__icon { display: inline-flex; flex: none; color: var(--v-oxblood); }
+  .v-toast[data-tone="info"] .v-toast__icon { color: var(--v-matcha); }
+  .v-toast__msg { font-size: 0.875rem; line-height: 1.4; color: var(--v-ink); }
+  .v-toast__x {
+    display: inline-flex; align-items: center; justify-content: center; flex: none;
+    width: 1.4rem; height: 1.4rem; margin-left: var(--v-space-1);
+    border: 0; background: transparent; cursor: pointer; border-radius: var(--v-radius-sm);
+    color: color-mix(in oklab, var(--v-ink) 50%, transparent);
+    transition: color var(--v-motion-fast) var(--v-motion-ease), background-color var(--v-motion-fast) var(--v-motion-ease);
+  }
+  .v-toast__x:hover { color: var(--v-ink); background: rgb(var(--glass-tint) / 0.7); }
+}
+
 /* Print — drop the chrome, lay the thread on white. */
 @media print {
   .mesh, .t-doc__print { display: none !important; }

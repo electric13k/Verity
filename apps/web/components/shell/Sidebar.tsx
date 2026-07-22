@@ -16,6 +16,7 @@ import {
 } from "@phosphor-icons/react";
 import { useApp } from "@/lib/store";
 import { ThemeToggle } from "./ThemeToggle";
+import { AccountRow } from "@/components/auth/AccountRow";
 
 const NAV = [
   { href: "/", label: "Chat", Icon: ChatTeardropText },
@@ -241,6 +242,8 @@ export function Sidebar({ onNavigate }: { onNavigate?: () => void }) {
       </div>
 
       <div className="hairline" style={{ margin: "var(--v-space-3) 0" }} />
+
+      <AccountRow />
 
       <div className="flex items-center justify-between gap-2">
         <span className="eyebrow" style={{ fontSize: "0.5625rem" }}>Theme</span>

@@ -4,7 +4,7 @@
 // at the live gateway adapter by default and the in-memory mock only when
 // NEXT_PUBLIC_VERITY_MOCK=1 — chosen ONCE here so callers never branch.
 
-import { apiUrl, IS_MOCK } from "./config";
+import { apiUrl, authHeaders, IS_MOCK } from "./config";
 import { readSSE } from "./sse";
 import { mock } from "./mock";
 import { live } from "./live";
@@ -27,7 +27,7 @@ async function runChatStream(
   try {
     res = await fetch(apiUrl(path), {
       method,
-      headers: { "Content-Type": "application/json" },
+      headers: { "Content-Type": "application/json", ...authHeaders() },
       body: JSON.stringify(body),
       signal,
     });
