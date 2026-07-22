@@ -8,6 +8,7 @@ package main
 import (
 	"log/slog"
 	"os"
+	"time"
 
 	"github.com/gofiber/fiber/v3"
 	"github.com/gofiber/fiber/v3/middleware/requestid"
@@ -49,7 +50,17 @@ func main() {
 	// Request-id on every request; the same id propagates to brain/core in
 	// gRPC metadata (x-verity-request-id) once the spine lands in M1.
 	app.Use(requestid.New())
+	// Observability wraps the whole handler stack: per-request structured log
+	// (no bodies/secrets) + Prometheus series. Always-on, no config to miss.
+	metrics := newMetrics()
+	app.Use(metrics.middleware())
 	app.Use(securityHeaders())
+
+	// Response cache for cacheable idempotent GETs. Redis-backed when REDIS_URL
+	// is set, in-memory otherwise (degrade-never-die).
+	respCache := newResponseCache()
+
+	auth := newAuthenticator()
 
 	app.Get("/healthz", func(c fiber.Ctx) error {
 		missing := missingConfig()
@@ -62,12 +73,19 @@ func main() {
 			"service":        "gateway",
 			"version":        version,
 			"missing_config": missing,
+			// New optional capabilities, reported additively.
+			"auth_provider": auth.provider,
+			"auth_ready":    auth.configured(),
+			"cache_backend": respCache.kind(),
 		})
 	})
 
+	// Prometheus-style metrics: unauthenticated, aggregate-only, mounted outside
+	// the /v1 auth group.
+	metrics.registerMetrics(app)
+
 	// Everything under /v1 requires a verified session (fail closed) and is
 	// rate limited per user. Route classes get their own buckets.
-	auth := newAuthenticator()
 	v1 := app.Group("/v1", auth.requireAuth(), rateLimit("api", 300, 60))
 
 	sp, err := newSpine()
@@ -80,6 +98,13 @@ func main() {
 		sp.registerFlows(v1)
 		sp.registerCompute(v1)
 		sp.registerPlatform(v1)
+		// WebSocket fan-out: an alternative to the SSE chat/flow streams for
+		// clients behind SSE-hostile proxies, with bidirectional control.
+		sp.registerWS(v1)
+		// Public transcript reads are the same bytes for every viewer of a
+		// share id — cache them (public scope, short TTL). Mounted before the
+		// route registration below so it fronts the handler.
+		app.Use("/v1/transcripts", respCache.cacheable(scopePublic, 30*time.Second))
 		// Public, unauthenticated read-only transcript view — mounted on the
 		// app, outside the /v1 auth group (the share id is the capability).
 		sp.registerTranscripts(app)

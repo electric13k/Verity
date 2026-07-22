@@ -17,8 +17,15 @@ var validate = validator.New(validator.WithRequiredStructEnabled())
 // decodeStrict parses the request body into T, rejecting unknown fields,
 // trailing garbage, and anything failing the struct's validate tags.
 func decodeStrict[T any](c fiber.Ctx) (*T, error) {
+	return decodeStrictBytes[T](c.Body())
+}
+
+// decodeStrictBytes is decodeStrict for a raw byte slice — the same strict
+// contract (unknown fields rejected, no trailing data, validate tags enforced)
+// for payloads that do not arrive as an HTTP body, e.g. WebSocket frames.
+func decodeStrictBytes[T any](data []byte) (*T, error) {
 	var payload T
-	dec := json.NewDecoder(bytes.NewReader(c.Body()))
+	dec := json.NewDecoder(bytes.NewReader(data))
 	dec.DisallowUnknownFields()
 	if err := dec.Decode(&payload); err != nil {
 		return nil, err

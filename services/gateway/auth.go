@@ -1,11 +1,18 @@
-// Session verification (L2). Clerk issues RS256 session JWTs; we verify
-// against the instance JWKS. Fail closed: if auth is not configured and dev
-// mode is not explicitly enabled, every protected route answers 503 — a
-// forgotten config can never mean an open gateway.
+// Session verification (L2). The gateway supports multiple identity providers,
+// selected by VERITY_AUTH_PROVIDER (clerk|supabase|dev; default clerk — current
+// behavior). Clerk issues RS256 session JWTs verified against the instance
+// JWKS; Supabase issues asymmetric (RS256/ES256/EdDSA via project JWKS) or
+// legacy HS256 (shared secret) JWTs — see auth_supabase.go. Every provider maps
+// its subject into the SAME tenant_ctx (user id + org id + email) that brain and
+// core already consume from gRPC metadata, so no downstream change is needed.
 //
-// Dev escape (local only): VERITY_DEV_MODE=1 authenticates every request as
-// VERITY_DEV_USER_ID (default "dev_user"). It is loud in the logs and must
-// never be set in a deployed environment.
+// Fail closed: if the selected provider is not configured and dev mode is not
+// explicitly enabled, every protected route answers 503 — a forgotten config can
+// never mean an open gateway.
+//
+// Dev escape (local only): VERITY_DEV_MODE=1 (or VERITY_AUTH_PROVIDER=dev)
+// authenticates every request as VERITY_DEV_USER_ID (default "dev_user"). It is
+// loud in the logs and must never be set in a deployed environment.
 package main
 
 import (
@@ -23,9 +30,17 @@ import (
 const (
 	localUserID = "verity_user_id"
 	localOrgID  = "verity_org_id"
+	localEmail  = "verity_email"
+
+	providerClerk    = "clerk"
+	providerSupabase = "supabase"
+	providerDev      = "dev"
 )
 
 type authenticator struct {
+	// provider selects the verification strategy: clerk (default), supabase,
+	// or dev. Unknown/empty values fall back to clerk (current behavior).
+	provider  string
 	devMode   bool
 	devUserID string
 	keys      keyfunc.Keyfunc // nil when Clerk is unconfigured
@@ -36,6 +51,9 @@ type authenticator struct {
 	// origin) accepted. Empty = azp check skipped (the claim is optional and
 	// only present on some Clerk templates).
 	allowedAZP map[string]bool
+	// supa is the Supabase verifier, initialized only when provider==supabase.
+	// nil for every other provider.
+	supa *supabaseVerifier
 }
 
 // issuerFromJWKS derives the Clerk instance issuer (scheme://host) from the
@@ -62,13 +80,25 @@ func parseAllowedAZP(raw string) map[string]bool {
 }
 
 func newAuthenticator() *authenticator {
+	provider := strings.ToLower(strings.TrimSpace(os.Getenv("VERITY_AUTH_PROVIDER")))
+	if provider == "" {
+		provider = providerClerk // default keeps current behavior
+	}
 	a := &authenticator{
-		devMode:   os.Getenv("VERITY_DEV_MODE") == "1",
+		provider:  provider,
+		devMode:   os.Getenv("VERITY_DEV_MODE") == "1" || provider == providerDev,
 		devUserID: envOr("VERITY_DEV_USER_ID", "dev_user"),
 	}
 	if a.devMode {
-		slog.Warn("VERITY_DEV_MODE=1 — all requests authenticate as the dev user; never enable in production",
+		slog.Warn("dev auth enabled (VERITY_DEV_MODE=1 or VERITY_AUTH_PROVIDER=dev) — all requests authenticate as the dev user; never enable in production",
 			"dev_user_id", a.devUserID)
+		return a
+	}
+	if provider == providerSupabase {
+		a.supa = newSupabaseVerifier()
+		if !a.supa.configured() {
+			slog.Warn("VERITY_AUTH_PROVIDER=supabase but no Supabase config found; protected routes will refuse requests until SUPABASE_URL/SUPABASE_JWKS_URL or SUPABASE_JWT_SECRET is set")
+		}
 		return a
 	}
 	jwksURL := os.Getenv("CLERK_JWKS_URL") // e.g. https://<slug>.clerk.accounts.dev/.well-known/jwks.json
@@ -102,22 +132,46 @@ func newAuthenticator() *authenticator {
 	return a
 }
 
-func (a *authenticator) configured() bool { return a.devMode || a.keys != nil }
+func (a *authenticator) configured() bool {
+	return a.devMode || a.keys != nil || (a.supa != nil && a.supa.configured())
+}
 
 var errNoToken = errors.New("no session token")
 
-func (a *authenticator) verify(c fiber.Ctx) (userID, orgID string, err error) {
-	if a.devMode {
-		return a.devUserID, "", nil
-	}
-	token := ""
+// bearerToken extracts the session token from the Authorization header
+// (non-browser clients) or the __session cookie (browsers — Supabase and Clerk
+// both keep the token out of JS-readable storage; the cookie is sent on every
+// request, including the WebSocket handshake).
+func bearerToken(c fiber.Ctx) string {
 	if h := c.Get("Authorization"); strings.HasPrefix(h, "Bearer ") {
-		token = strings.TrimPrefix(h, "Bearer ")
-	} else if cookie := c.Cookies("__session"); cookie != "" {
-		token = cookie
+		return strings.TrimPrefix(h, "Bearer ")
 	}
+	if cookie := c.Cookies("__session"); cookie != "" {
+		return cookie
+	}
+	return ""
+}
+
+func (a *authenticator) verify(c fiber.Ctx) (userID, orgID, email string, err error) {
+	if a.devMode {
+		return a.devUserID, "", "", nil
+	}
+	token := bearerToken(c)
 	if token == "" {
-		return "", "", errNoToken
+		return "", "", "", errNoToken
+	}
+	// Supabase provider: delegate to the Supabase verifier (auth_supabase.go),
+	// which maps `sub`→user id (Supabase has no org concept, so org is empty)
+	// and surfaces the `email` claim into tenant_ctx.
+	if a.provider == providerSupabase {
+		if a.supa == nil {
+			return "", "", "", errors.New("supabase auth not configured")
+		}
+		sub, mail, verr := a.supa.verify(token)
+		if verr != nil {
+			return "", "", "", verr
+		}
+		return sub, "", mail, nil
 	}
 	claims := jwt.MapClaims{}
 	opts := []jwt.ParserOption{jwt.WithValidMethods([]string{"RS256"})}
@@ -128,7 +182,7 @@ func (a *authenticator) verify(c fiber.Ctx) (userID, orgID string, err error) {
 	}
 	parsed, err := jwt.ParseWithClaims(token, claims, a.keys.Keyfunc, opts...)
 	if err != nil || !parsed.Valid {
-		return "", "", errors.New("invalid session token")
+		return "", "", "", errors.New("invalid session token")
 	}
 	// azp (authorized party) — defense in depth against tokens minted for a
 	// different frontend on the same Clerk instance. Only enforced when an
@@ -136,15 +190,16 @@ func (a *authenticator) verify(c fiber.Ctx) (userID, orgID string, err error) {
 	if a.allowedAZP != nil {
 		azp, _ := claims["azp"].(string)
 		if !a.allowedAZP[azp] {
-			return "", "", errors.New("session token azp not allowed")
+			return "", "", "", errors.New("session token azp not allowed")
 		}
 	}
 	sub, _ := claims["sub"].(string)
 	if sub == "" {
-		return "", "", errors.New("session token missing sub")
+		return "", "", "", errors.New("session token missing sub")
 	}
 	org, _ := claims["org_id"].(string)
-	return sub, org, nil
+	mail, _ := claims["email"].(string)
+	return sub, org, mail, nil
 }
 
 // requireAuth protects a route group. Expired/tampered/absent sessions are
@@ -153,15 +208,16 @@ func (a *authenticator) requireAuth() fiber.Handler {
 	return func(c fiber.Ctx) error {
 		if !a.configured() {
 			return c.Status(fiber.StatusServiceUnavailable).JSON(fiber.Map{
-				"error": "auth not configured (set CLERK_JWKS_URL; VERITY_DEV_MODE=1 for local dev)",
+				"error": "auth not configured (set CLERK_JWKS_URL or Supabase config; VERITY_DEV_MODE=1 for local dev)",
 			})
 		}
-		userID, orgID, err := a.verify(c)
+		userID, orgID, email, err := a.verify(c)
 		if err != nil {
 			return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{"error": "unauthorized"})
 		}
 		c.Locals(localUserID, userID)
 		c.Locals(localOrgID, orgID)
+		c.Locals(localEmail, email)
 		return c.Next()
 	}
 }
@@ -175,6 +231,16 @@ func currentUserID(c fiber.Ctx) string {
 
 func currentOrgID(c fiber.Ctx) string {
 	if v, ok := c.Locals(localOrgID).(string); ok {
+		return v
+	}
+	return ""
+}
+
+// currentEmail returns the verified email claim (Supabase always; Clerk when
+// the token carries one), empty when absent. Part of tenant_ctx, never trusted
+// from a request body.
+func currentEmail(c fiber.Ctx) string {
+	if v, ok := c.Locals(localEmail).(string); ok {
 		return v
 	}
 	return ""

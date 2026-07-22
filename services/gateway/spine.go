@@ -66,6 +66,10 @@ func outgoingCtx(c fiber.Ctx, timeout time.Duration) (context.Context, context.C
 		"x-verity-request-id", requestid.FromContext(c),
 		"x-verity-user-id", currentUserID(c),
 		"x-verity-org-id", currentOrgID(c),
+		// email is additive tenant_ctx (Supabase always, Clerk when present);
+		// brain ignores metadata it does not read, so this needs no downstream
+		// change.
+		"x-verity-email", currentEmail(c),
 	)
 	return metadata.NewOutgoingContext(ctx, md), cancel
 }
