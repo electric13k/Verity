@@ -1460,6 +1460,30 @@ body {
   );
 }
 
+/* WebGL ambient ground — a shader canvas layered above the CSS fallback. It is
+   opaque when active, so it fully covers the fallback layers; it fades in on
+   mount and simply vanishes (revealing the CSS mesh beneath) if WebGL is
+   unavailable or the context is lost. Under reduced motion the global rule
+   zeroes this transition, so it appears instantly with no animation. */
+.mesh__gl {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  display: block;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 700ms var(--v-motion-ease);
+}
+.mesh__gl.is-active {
+  opacity: 1;
+}
+/* Only one ground animates at a time: when the shader is live it covers the
+   CSS blobs, so park their idle loop. */
+.mesh:has(.mesh__gl.is-active) .mesh__blob {
+  animation-play-state: paused;
+}
+
 /* ------------------------------------------------------------------ *
  * M4 perf pass — streaming plaintext, lazy-load skeletons, and the
  * paginated history "Load older" affordance. All honor reduced motion.
