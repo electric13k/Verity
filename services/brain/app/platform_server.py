@@ -29,8 +29,7 @@ import grpc
 
 from app.db import db, DBUnavailable
 from app.pb.verity.v1 import platform_pb2, platform_pb2_grpc
-from app.offices.runner import OfficeDefinition, OfficeRunner
-from app.flows.engine import run_flow
+from app.queue import Job, job_queue
 from app.mcp_client import ConsentRequired, MCPClient, MCPError, SSRFError
 from app.providers import registry
 from app.providers.base import ProviderError
@@ -47,24 +46,14 @@ from app.repos import provider_keys as pk_repo
 
 log = logging.getLogger("brain.platform")
 
-# Background execution for office/branch runs: hold strong refs so the loop
-# does not GC a pending task, discard on completion.
-_bg: set[asyncio.Task] = set()
-
-
-def _spawn(coro) -> None:
-    task = asyncio.get_running_loop().create_task(coro)
-    _bg.add(task)
-    task.add_done_callback(_bg.discard)
-
-
-def _office_state_root() -> str:
-    return os.environ.get(
-        "VERITY_OFFICE_STATE_PATH", os.path.join(tempfile.gettempdir(), "verity-offices")
-    )
-
-
-_office_runner = OfficeRunner(state_root=_office_state_root())
+# Detached office/flow runs (G12): the servicer creates the durable run row and
+# ENQUEUES a Job onto the shared run queue, then returns immediately. A worker
+# (in-process pool or a `python -m app.worker` process, Redis-leased) claims the
+# job and executes it via app.queue.handlers.dispatch — the same machinery the
+# G3 scheduler enqueues onto, so scheduled and manual runs share one path and
+# one per-user concurrency cap. The Job carries the office's OWNER user_id, set
+# server-side here (never from a request body); the worker re-resolves the
+# provider from that owner's vaulted key.
 
 BRANCH_CONTEXT_WINDOW = 12
 UPLOAD_MAX_BYTES = 16 * 1024 * 1024  # raw upload cap (markitdown input)
@@ -245,33 +234,23 @@ class PlatformServicer(platform_pb2_grpc.PlatformServiceServicer):
         if office is None:
             await context.abort(grpc.StatusCode.NOT_FOUND, "office not found")
         d = office.definition or {}
+        # Resolve up-front purely to FAIL FAST on a missing/invalid provider key
+        # (the detached worker re-resolves from the stored owner at run time).
         try:
-            provider, model = await registry.resolve_for_user(d.get("model", ""), tenant.user_id)
+            await registry.resolve_for_user(d.get("model", ""), tenant.user_id)
         except ProviderError as exc:
             await context.abort(grpc.StatusCode.FAILED_PRECONDITION, str(exc))
         run_id = await offices_repo.start_run(tenant.user_id, office.id)
-        _spawn(self._execute_office(tenant.user_id, run_id, office, provider, model))
-        return platform_pb2.RunOfficeResponse(run_id=run_id)
-
-    async def _execute_office(self, user_id, run_id, office, provider, model) -> None:
-        try:
-            definition = OfficeDefinition(
-                name=office.name,
-                task=(office.definition or {}).get("task", office.name),
-                schedule=office.schedule_cron,
-                flow_kind=(office.definition or {}).get("flow_kind", ""),
-                model=(office.definition or {}).get("model", ""),
-                workers=int((office.definition or {}).get("workers", 2)),
+        # Enqueue detached (G12). Owner user_id is server-side; the worker runs
+        # the office via app.queue.handlers.dispatch and writes STATE/results.
+        await job_queue.enqueue(
+            Job(
+                kind="office",
+                user_id=tenant.user_id,
+                payload={"office_id": office.id, "run_id": run_id},
             )
-            run = await _office_runner.run(definition, user_id, provider, model)
-            state_md = run.state_path.read_text(encoding="utf-8") if run.state_path.exists() else ""
-            await offices_repo.finish_run(user_id, run_id, run.status, state_md)
-        except Exception as exc:  # background: never crash the loop
-            log.warning("office run %s failed: %s", run_id, exc)
-            try:
-                await offices_repo.finish_run(user_id, run_id, "failed", f"error: {exc}")
-            except Exception:
-                pass
+        )
+        return platform_pb2.RunOfficeResponse(run_id=run_id)
 
     async def GetOfficeRun(self, request, context):
         tenant = await require_tenant(context)
@@ -405,8 +384,10 @@ class PlatformServicer(platform_pb2_grpc.PlatformServiceServicer):
         )
         task = task.strip() or brief or "Continue from the conversation."
 
+        # Resolve up-front only to fail fast on a missing provider key; the
+        # detached worker re-resolves the default selector from the owner.
         try:
-            provider, model = await registry.resolve_for_user("", tenant.user_id)
+            await registry.resolve_for_user("", tenant.user_id)
         except ProviderError as exc:
             await context.abort(grpc.StatusCode.FAILED_PRECONDITION, str(exc))
 
@@ -415,39 +396,33 @@ class PlatformServicer(platform_pb2_grpc.PlatformServiceServicer):
                 tenant.user_id, {"task": task, "kind": "flow"}
             )
             await branches_repo.create(tenant.user_id, msg.id, "flow", run_id)
-            _spawn(self._execute_flow_branch(tenant.user_id, run_id, provider, model, task))
+            # Detached (G12): worker runs the flow via dispatch. "" selector →
+            # the worker re-resolves the owner's default model server-side.
+            await job_queue.enqueue(
+                Job(
+                    kind="flow",
+                    user_id=tenant.user_id,
+                    payload={"run_id": run_id, "task": task, "model": ""},
+                )
+            )
         else:  # office
             office = await offices_repo.create(
                 tenant.user_id,
                 f"Branch: {(brief or msg.content)[:60]}",
                 "",  # no schedule — a branch is a one-off run
-                {"task": task, "flow_kind": "", "model": model, "workers": 2},
+                {"task": task, "flow_kind": "", "model": "", "workers": 2},
             )
             run_id = await offices_repo.start_run(tenant.user_id, office.id)
             await branches_repo.create(tenant.user_id, msg.id, "office", run_id)
-            _spawn(self._execute_office(tenant.user_id, run_id, office, provider, model))
+            await job_queue.enqueue(
+                Job(
+                    kind="office",
+                    user_id=tenant.user_id,
+                    payload={"office_id": office.id, "run_id": run_id},
+                )
+            )
 
         return platform_pb2.CreateBranchResponse(run_id=run_id, kind=kind)
-
-    async def _execute_flow_branch(self, user_id, run_id, provider, model, task) -> None:
-        final = ""
-        phases: list[dict] = []
-        try:
-            async for event in run_flow(provider, model, task):
-                phases.append({"role": event.role, "phase": event.phase, "content": event.content})
-                if event.phase == "converge":
-                    final = event.content
-            await branches_repo.finish_flow_run(
-                user_id, run_id, "done", {"phases": phases, "final": final}
-            )
-        except Exception as exc:
-            log.warning("flow branch %s failed: %s", run_id, exc)
-            try:
-                await branches_repo.finish_flow_run(
-                    user_id, run_id, "failed", {"error": str(exc)}
-                )
-            except Exception:
-                pass
 
     # --- Transcripts (PUBLIC) ---------------------------------------------
 

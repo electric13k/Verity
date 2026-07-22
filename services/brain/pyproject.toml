@@ -15,7 +15,18 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
-dev = ["pytest>=8", "pytest-asyncio>=0.24"]
+# fakeredis + croniter let the test suite exercise the Redis queue path and the
+# real cron next-fire computation without a live Redis / without shipping either
+# as a runtime requirement.
+dev = ["pytest>=8", "pytest-asyncio>=0.24", "croniter>=2", "fakeredis>=2"]
+# G3 office scheduler cron engine. OPTIONAL + lazily imported: absent → the
+# scheduler runs but computes no fire times (offices never fire), logged once,
+# reported by /healthz. Boot never dies. `pip install verity-brain[scheduler]`.
+scheduler = ["croniter>=2"]
+# G12 durable run queue + G3 cross-replica tick lease. OPTIONAL: with no
+# REDIS_URL (or this absent) the queue is the in-process asyncio one and the
+# scheduler uses a single-process tick guard. `pip install verity-brain[redis]`.
+redis = ["redis>=4.3"]
 # cognee = PRIMARY memory engine, kept OPTIONAL so the brain has no new REQUIRED
 # dependency and boots (and tests) without it. Install to enable the in-process
 # knowledge-graph path: `pip install verity-brain[cognee]` + VERITY_COGNEE=1.
