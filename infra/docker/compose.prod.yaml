@@ -125,6 +125,37 @@ services:
     networks: [private, egress]            # egress: managed PG / remote Qdrant
     <<: *app-restart
 
+  # Headless-browser fetch service (backlog G11). The SSRF boundary for the
+  # brain's web_fetch tool: the brain hands it a model-chosen URL (never
+  # dereferencing URLs itself) and this service resolves + validates + renders
+  # it. The brain dials it by name at http://fetch:8400 (its config default for
+  # FETCH_SERVICE_URL), so no brain wiring is needed here.
+  #
+  #   - private : reachable by the brain; ZERO published ports (never exposed).
+  #   - egress  : Chromium must dial arbitrary PUBLIC pages; outbound-only, no
+  #               inbound (nothing published), so still unreachable from the net.
+  # The SSRF guard (loopback/private/link-local/ULA/CGNAT/metadata rejected
+  # before navigation AND on every redirect/subresource) is what makes handing a
+  # browser an egress path safe. All FETCH_* knobs are optional (boot-degrades):
+  # if Chromium can't launch the service still boots, /healthz reports degraded,
+  # and /fetch returns a clean 503.
+  fetch:
+    image: verity/fetch:${VERITY_TAG:-latest}
+    build:
+      context: ../../services/fetch
+      dockerfile: Dockerfile
+    environment:
+      # All optional — safe defaults in app/config.py. Override without a rebuild.
+      FETCH_MAX_CONCURRENCY: ${FETCH_MAX_CONCURRENCY:-4}
+      FETCH_DEFAULT_TIMEOUT_MS: ${FETCH_DEFAULT_TIMEOUT_MS:-30000}
+      FETCH_MAX_TIMEOUT_MS: ${FETCH_MAX_TIMEOUT_MS:-60000}
+      FETCH_MAX_BYTES: ${FETCH_MAX_BYTES:-2000000}
+      FETCH_ALLOWED_PORTS: ${FETCH_ALLOWED_PORTS:-80,443}
+      # Optional forward proxy for Chromium egress (unset => dial directly).
+      FETCH_PROXY_URL: ${FETCH_PROXY_URL:-}
+    networks: [private, egress]            # egress: Chromium dials public pages
+    <<: *app-restart
+
   # Compute node daemon (M7) — OPTIONAL, off by default (profile: compute).
   # Pure gRPC client; dials the coordinator (core) — note the http:// scheme.
   node:
