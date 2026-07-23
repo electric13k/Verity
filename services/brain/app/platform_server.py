@@ -28,6 +28,7 @@ import tempfile
 import grpc
 
 from app.db import db, DBUnavailable
+from app.entitlements import service as entitlements
 from app.pb.verity.v1 import platform_pb2, platform_pb2_grpc
 from app.queue import Job, job_queue
 from app.mcp_client import ConsentRequired, MCPClient, MCPError, SSRFError
@@ -423,6 +424,52 @@ class PlatformServicer(platform_pb2_grpc.PlatformServiceServicer):
             )
 
         return platform_pb2.CreateBranchResponse(run_id=run_id, kind=kind)
+
+    # --- Entitlements + usage metering (anti-tamper) ----------------------
+
+    async def CheckEntitlement(self, request, context):
+        """Server-authoritative quota gate. The gateway calls this BEFORE a
+        metered action reaches the AI. Identity is the metadata user_id (fail
+        closed if absent) — the metric/amount/key in the request are the ONLY
+        client-influenced inputs, and none of them is identity or plan: the plan
+        and current usage are read from the DB by this user_id. Atomically
+        reserves against the ledger (idempotent on the key)."""
+        tenant = await require_tenant(context)
+        decision = await entitlements.check_and_reserve(
+            tenant.user_id,
+            request.metric,
+            request.amount or 1,
+            request.idempotency_key,
+        )
+        return platform_pb2.CheckEntitlementResponse(
+            allowed=decision.allowed,
+            enforced=decision.enforced,
+            reason=decision.reason,
+            limit=decision.limit,
+            remaining=decision.remaining,
+            plan_id=decision.plan_id,
+            retry_after_seconds=decision.retry_after_seconds,
+        )
+
+    async def GetEntitlements(self, request, context):
+        """Read-only plan + current-window usage for the signed-in user, for the
+        frontend to DISPLAY. Never an enforcement input. Keyed to the metadata
+        user_id, so a client cannot read another user's usage."""
+        tenant = await require_tenant(context)
+        snap = await entitlements.snapshot(tenant.user_id)
+        return platform_pb2.EntitlementsResponse(
+            plan_id=snap.plan_id,
+            plan_name=snap.plan_name,
+            status=snap.status,
+            enforced=snap.enforced,
+            metrics=[
+                platform_pb2.MetricUsage(
+                    metric=m.metric, limit=m.limit, used=m.used,
+                    remaining=m.remaining, window="day",
+                )
+                for m in snap.metrics
+            ],
+        )
 
     # --- Transcripts (PUBLIC) ---------------------------------------------
 

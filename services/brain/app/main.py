@@ -13,6 +13,7 @@ from fastapi import FastAPI
 from app.config import settings
 from app import grpc_server
 from app.db import db
+from app.entitlements import service as entitlements
 from app.queue import job_queue
 from app.queue.handlers import dispatch
 from app.scheduler import office_scheduler
@@ -62,4 +63,7 @@ async def healthz() -> dict:
         "redis": {"configured": bool(settings.redis_url)},
         "queue": job_queue.health(),          # backend (in-process|redis), workers, cap
         "scheduler": office_scheduler.health(),  # enabled/running, cron+coordination status
+        # Entitlement store status: disabled (dev open) | ready | unavailable
+        # (enforced but DB down → gated actions fail closed).
+        "entitlements": entitlements.store_status(),
     }

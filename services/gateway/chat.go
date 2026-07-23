@@ -163,9 +163,11 @@ func (s *spine) registerChat(v1 fiber.Router) {
 			streamChatChunks(w, stream)
 		})
 	}
-	// Chat has its own (tighter) bucket on top of the group-level api bucket.
-	// The limiter MUST precede the handler: the SSE handler returns via
+	// Chat has its own (tighter) bucket on top of the group-level api bucket,
+	// PLUS the entitlement quota gate (burst vs plan — both enforced). Order is
+	// [rateLimit, entitlement, handler]: the SSE handler returns via
 	// SendStreamWriter without calling c.Next(), so any middleware registered
-	// AFTER it never runs. Order is [rateLimit, handler].
-	v1.Post("/chat", rateLimit("chat", 60, 10), handler)
+	// AFTER it never runs — the gate must precede the handler and it charges one
+	// `messages` unit server-side before a byte reaches the AI.
+	v1.Post("/chat", rateLimit("chat", 60, 10), s.entitlement("messages"), handler)
 }

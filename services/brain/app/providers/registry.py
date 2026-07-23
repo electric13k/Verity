@@ -71,12 +71,25 @@ def resolve(selector: str) -> tuple[Provider, str]:
 
 async def resolve_for_user(selector: str, user_id: str) -> tuple[Provider, str]:
     """selector → (provider, model), consulting the user's vaulted key first
-    then server env. Raises ProviderError with a user-safe message."""
+    then server env. Raises ProviderError with a user-safe message.
+
+    House ("provided by Verity") models are additionally gated by the per-user
+    daily cap read from the user's entitlements (not env-only): the cap lives in
+    the plan/overrides, keyed to the metadata user_id, so no client edit can lift
+    it. This is a READ-ONLY peek — the authoritative count is reserved at
+    execution time (entitlements.service.reserve_house_call) — so fail-fast
+    resolves (office/branch creation) never consume the cap."""
     provider_name, model = _split(selector)
     user_key = None
     if provider_name in KEYED_PROVIDERS:
         user_key = await _vaulted_key(provider_name, user_id)
-    return _resolve_with_key(provider_name, model, user_key=user_key)
+    provider, resolved_model = _resolve_with_key(provider_name, model, user_key=user_key)
+    if provider.name in HOUSE_PROVIDERS:
+        # Imported lazily to avoid an entitlements→providers import cycle.
+        from app.entitlements import service as entitlements
+
+        await entitlements.enforce_house_cap(user_id)
+    return provider, resolved_model
 
 
 def _split(selector: str) -> tuple[str, str]:
@@ -128,8 +141,10 @@ def _resolve_with_key(
             base = os.environ.get("OLLAMA_BASE_URL", "http://127.0.0.1:11434/v1")
             return OpenAICompatProvider(api_key="ollama", base_url=base, name="ollama"), model
         case "verity":
-            # House models ("provided by Verity"): availability is purely
-            # env-gated, no user config row. Per-user daily caps land later.
+            # House models ("provided by Verity"): availability is env-gated
+            # (no user key row). The per-user DAILY cap is enforced in
+            # resolve_for_user via the entitlement store (plan/overrides), not
+            # here — this branch only decides availability.
             key = settings.ollama_cloud_api_key or ""
             if not key:
                 raise ProviderError("house models are not enabled on this server")

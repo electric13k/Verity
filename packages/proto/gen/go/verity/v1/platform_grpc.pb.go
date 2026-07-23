@@ -39,6 +39,8 @@ const (
 	PlatformService_UploadFile_FullMethodName         = "/verity.v1.PlatformService/UploadFile"
 	PlatformService_CreateBranch_FullMethodName       = "/verity.v1.PlatformService/CreateBranch"
 	PlatformService_GetTranscript_FullMethodName      = "/verity.v1.PlatformService/GetTranscript"
+	PlatformService_CheckEntitlement_FullMethodName   = "/verity.v1.PlatformService/CheckEntitlement"
+	PlatformService_GetEntitlements_FullMethodName    = "/verity.v1.PlatformService/GetEntitlements"
 )
 
 // PlatformServiceClient is the client API for PlatformService service.
@@ -81,6 +83,16 @@ type PlatformServiceClient interface {
 	// PUBLIC read-only. Keyed by an unguessable share id (the bearer capability)
 	// — NO tenant metadata is consulted, so the gateway serves it without auth.
 	GetTranscript(ctx context.Context, in *TranscriptRequest, opts ...grpc.CallOption) (*TranscriptResponse, error)
+	// --- Entitlements + usage metering (anti-tamper) -----------------------
+	// Server-authoritative quota enforcement. The gateway calls CheckEntitlement
+	// BEFORE proxying a metered action (chat/flow/office/compute/upload) to the
+	// AI; brain decides against the DB, keyed to the metadata user_id — NEVER a
+	// request body. It atomically reserves against the usage ledger (idempotent
+	// on the key), so a client editing its bundle cannot grant itself free usage.
+	CheckEntitlement(ctx context.Context, in *CheckEntitlementRequest, opts ...grpc.CallOption) (*CheckEntitlementResponse, error)
+	// Read-only plan + current-window usage snapshot for the signed-in user, for
+	// the frontend to DISPLAY (it is display-only; enforcement never trusts it).
+	GetEntitlements(ctx context.Context, in *Empty, opts ...grpc.CallOption) (*EntitlementsResponse, error)
 }
 
 type platformServiceClient struct {
@@ -291,6 +303,26 @@ func (c *platformServiceClient) GetTranscript(ctx context.Context, in *Transcrip
 	return out, nil
 }
 
+func (c *platformServiceClient) CheckEntitlement(ctx context.Context, in *CheckEntitlementRequest, opts ...grpc.CallOption) (*CheckEntitlementResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(CheckEntitlementResponse)
+	err := c.cc.Invoke(ctx, PlatformService_CheckEntitlement_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *platformServiceClient) GetEntitlements(ctx context.Context, in *Empty, opts ...grpc.CallOption) (*EntitlementsResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(EntitlementsResponse)
+	err := c.cc.Invoke(ctx, PlatformService_GetEntitlements_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // PlatformServiceServer is the server API for PlatformService service.
 // All implementations must embed UnimplementedPlatformServiceServer
 // for forward compatibility.
@@ -331,6 +363,16 @@ type PlatformServiceServer interface {
 	// PUBLIC read-only. Keyed by an unguessable share id (the bearer capability)
 	// — NO tenant metadata is consulted, so the gateway serves it without auth.
 	GetTranscript(context.Context, *TranscriptRequest) (*TranscriptResponse, error)
+	// --- Entitlements + usage metering (anti-tamper) -----------------------
+	// Server-authoritative quota enforcement. The gateway calls CheckEntitlement
+	// BEFORE proxying a metered action (chat/flow/office/compute/upload) to the
+	// AI; brain decides against the DB, keyed to the metadata user_id — NEVER a
+	// request body. It atomically reserves against the usage ledger (idempotent
+	// on the key), so a client editing its bundle cannot grant itself free usage.
+	CheckEntitlement(context.Context, *CheckEntitlementRequest) (*CheckEntitlementResponse, error)
+	// Read-only plan + current-window usage snapshot for the signed-in user, for
+	// the frontend to DISPLAY (it is display-only; enforcement never trusts it).
+	GetEntitlements(context.Context, *Empty) (*EntitlementsResponse, error)
 	mustEmbedUnimplementedPlatformServiceServer()
 }
 
@@ -400,6 +442,12 @@ func (UnimplementedPlatformServiceServer) CreateBranch(context.Context, *CreateB
 }
 func (UnimplementedPlatformServiceServer) GetTranscript(context.Context, *TranscriptRequest) (*TranscriptResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method GetTranscript not implemented")
+}
+func (UnimplementedPlatformServiceServer) CheckEntitlement(context.Context, *CheckEntitlementRequest) (*CheckEntitlementResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method CheckEntitlement not implemented")
+}
+func (UnimplementedPlatformServiceServer) GetEntitlements(context.Context, *Empty) (*EntitlementsResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method GetEntitlements not implemented")
 }
 func (UnimplementedPlatformServiceServer) mustEmbedUnimplementedPlatformServiceServer() {}
 func (UnimplementedPlatformServiceServer) testEmbeddedByValue()                         {}
@@ -782,6 +830,42 @@ func _PlatformService_GetTranscript_Handler(srv interface{}, ctx context.Context
 	return interceptor(ctx, in, info, handler)
 }
 
+func _PlatformService_CheckEntitlement_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(CheckEntitlementRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(PlatformServiceServer).CheckEntitlement(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: PlatformService_CheckEntitlement_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(PlatformServiceServer).CheckEntitlement(ctx, req.(*CheckEntitlementRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _PlatformService_GetEntitlements_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(Empty)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(PlatformServiceServer).GetEntitlements(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: PlatformService_GetEntitlements_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(PlatformServiceServer).GetEntitlements(ctx, req.(*Empty))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 // PlatformService_ServiceDesc is the grpc.ServiceDesc for PlatformService service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -868,6 +952,14 @@ var PlatformService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "GetTranscript",
 			Handler:    _PlatformService_GetTranscript_Handler,
+		},
+		{
+			MethodName: "CheckEntitlement",
+			Handler:    _PlatformService_CheckEntitlement_Handler,
+		},
+		{
+			MethodName: "GetEntitlements",
+			Handler:    _PlatformService_GetEntitlements_Handler,
 		},
 	},
 	Streams:  []grpc.StreamDesc{},

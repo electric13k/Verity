@@ -47,6 +47,17 @@ service PlatformService {
   // PUBLIC read-only. Keyed by an unguessable share id (the bearer capability)
   // — NO tenant metadata is consulted, so the gateway serves it without auth.
   rpc GetTranscript(TranscriptRequest) returns (TranscriptResponse);
+
+  // --- Entitlements + usage metering (anti-tamper) -----------------------
+  // Server-authoritative quota enforcement. The gateway calls CheckEntitlement
+  // BEFORE proxying a metered action (chat/flow/office/compute/upload) to the
+  // AI; brain decides against the DB, keyed to the metadata user_id — NEVER a
+  // request body. It atomically reserves against the usage ledger (idempotent
+  // on the key), so a client editing its bundle cannot grant itself free usage.
+  rpc CheckEntitlement(CheckEntitlementRequest) returns (CheckEntitlementResponse);
+  // Read-only plan + current-window usage snapshot for the signed-in user, for
+  // the frontend to DISPLAY (it is display-only; enforcement never trusts it).
+  rpc GetEntitlements(Empty) returns (EntitlementsResponse);
 }
 
 message Empty {}
@@ -251,4 +262,40 @@ message TranscriptResponse {
   string title = 1;
   repeated Message messages = 2;
   string created_at = 3;   // RFC3339
+}
+
+// --- Entitlements + usage metering -----------------------------------------
+
+message CheckEntitlementRequest {
+  string metric = 1;           // messages | flows | offices | compute | uploads | ...
+  uint64 amount = 2;           // units to reserve; 0 treated as 1
+  string idempotency_key = 3;  // dedupes retries; the SAME key never double-charges.
+                               // Opaque to brain; the gateway scopes it to the
+                               // verified user id so it can't collide across users.
+}
+
+message CheckEntitlementResponse {
+  bool allowed = 1;               // false = over quota / suspended / store-down-when-required
+  bool enforced = 2;              // false = entitlements disabled (dev open mode); allowed is trivially true
+  string reason = 3;              // user-safe denial reason (empty when allowed)
+  int64 limit = 4;                // window cap for the metric; -1 = unlimited
+  int64 remaining = 5;            // units left after this reservation; -1 = unlimited
+  string plan_id = 6;             // the plan the decision was made against
+  uint32 retry_after_seconds = 7; // hint until the window rolls over (0 when unknown)
+}
+
+message EntitlementsResponse {
+  string plan_id = 1;
+  string plan_name = 2;
+  string status = 3;              // active | suspended | canceled
+  bool enforced = 4;              // false when entitlements are disabled server-side
+  repeated MetricUsage metrics = 5;
+}
+
+message MetricUsage {
+  string metric = 1;
+  int64 limit = 2;                // -1 = unlimited
+  int64 used = 3;                 // consumed this window
+  int64 remaining = 4;            // -1 = unlimited
+  string window = 5;              // e.g. "day"
 }

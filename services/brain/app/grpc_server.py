@@ -20,6 +20,7 @@ from app.bop import sanitize_machinery
 from app.config import settings
 from app.confidence import score_response
 from app.db import db
+from app.entitlements import service as entitlements
 from app.flows.engine import run_flow
 from app.flows.research import run_research_flow
 from app.injection import guardrail_note, scan
@@ -418,6 +419,19 @@ class BrainServicer(brain_pb2_grpc.BrainServiceServicer):
             await context.abort(grpc.StatusCode.FAILED_PRECONDITION, str(exc))
             return
 
+        # House ("provided by Verity") models: record one call against the daily
+        # cap (authoritative count; the resolve above already peeked). Keyed to
+        # the request id so a retry of the same turn is idempotent.
+        if provider.name in registry.HOUSE_PROVIDERS:
+            if not await entitlements.reserve_house_call(
+                tenant.user_id, f"house:chat:{tenant.request_id}"
+            ):
+                await context.abort(
+                    grpc.StatusCode.RESOURCE_EXHAUSTED,
+                    "house model daily limit reached",
+                )
+                return
+
         conversation_id = ""
         assistant_msg_id = ""
         title = ""
@@ -585,6 +599,15 @@ class BrainServicer(brain_pb2_grpc.BrainServiceServicer):
         except ProviderError as exc:
             await context.abort(grpc.StatusCode.FAILED_PRECONDITION, str(exc))
             return
+        if provider.name in registry.HOUSE_PROVIDERS:
+            if not await entitlements.reserve_house_call(
+                tenant.user_id, f"house:flow:{tenant.request_id}"
+            ):
+                await context.abort(
+                    grpc.StatusCode.RESOURCE_EXHAUSTED,
+                    "house model daily limit reached",
+                )
+                return
         log.info(
             "flow start user=%s provider=%s kind=%s request_id=%s",
             tenant.user_id, provider.name, request.flow_kind or "auto", tenant.request_id,

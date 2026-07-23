@@ -62,6 +62,23 @@ class Settings(BaseSettings):
     # G9 image generation is provider-gated; unset → generate_image degrades.
     image_api_key: str | None = None         # secret; enables generate_image
 
+    # Server-authoritative entitlements + usage metering (anti-tamper quotas).
+    # OFF by default so local dev / echo runs OPEN without a DB. When ON
+    # (VERITY_ENTITLEMENTS=1) every gated action is decided against the DB by the
+    # metadata user_id, and — the fail-closed rule — if the entitlement store is
+    # required but unreachable, gated actions are DENIED (never silently open).
+    # This gates behaviour only; it is never a secret and never logged as one.
+    entitlements_enabled: bool = Field(
+        default=False, validation_alias="VERITY_ENTITLEMENTS"
+    )
+    # House-provider ("provided by Verity", §5) per-user DAILY cap. When
+    # entitlements are ON the cap comes from the user's plan/overrides; this env
+    # is the DEGRADE default used only when entitlements are OFF (so dev can
+    # still bound house usage). None + entitlements off = house calls uncapped.
+    house_daily_cap: int | None = Field(
+        default=None, validation_alias="VERITY_HOUSE_DAILY_CAP"
+    )
+
     def missing(self) -> list[str]:
         """Env-var names (upper-cased) for every unset setting.
 
@@ -82,6 +99,9 @@ _NON_BLOCKING = frozenset(
     {
         "WEB_SEARCH_PROVIDER", "TAVILY_API_KEY", "BRAVE_API_KEY", "SEARXNG_URL",
         "OUTPUT_FILES_DIR", "KB_DIR", "IMAGE_API_KEY",
+        # Entitlements are opt-in; their absence means "quotas off", not
+        # "misconfigured". The house cap is likewise an optional degrade knob.
+        "ENTITLEMENTS_ENABLED", "HOUSE_DAILY_CAP",
     }
 )
 

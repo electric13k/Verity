@@ -139,6 +139,16 @@ class PlatformServiceStub:
                 request_serializer=verity_dot_v1_dot_platform__pb2.TranscriptRequest.SerializeToString,
                 response_deserializer=verity_dot_v1_dot_platform__pb2.TranscriptResponse.FromString,
                 _registered_method=True)
+        self.CheckEntitlement = channel.unary_unary(
+                '/verity.v1.PlatformService/CheckEntitlement',
+                request_serializer=verity_dot_v1_dot_platform__pb2.CheckEntitlementRequest.SerializeToString,
+                response_deserializer=verity_dot_v1_dot_platform__pb2.CheckEntitlementResponse.FromString,
+                _registered_method=True)
+        self.GetEntitlements = channel.unary_unary(
+                '/verity.v1.PlatformService/GetEntitlements',
+                request_serializer=verity_dot_v1_dot_platform__pb2.Empty.SerializeToString,
+                response_deserializer=verity_dot_v1_dot_platform__pb2.EntitlementsResponse.FromString,
+                _registered_method=True)
 
 
 class PlatformServiceServicer:
@@ -279,6 +289,26 @@ class PlatformServiceServicer:
         context.set_details('Method not implemented!')
         raise NotImplementedError('Method not implemented!')
 
+    def CheckEntitlement(self, request, context):
+        """--- Entitlements + usage metering (anti-tamper) -----------------------
+        Server-authoritative quota enforcement. The gateway calls CheckEntitlement
+        BEFORE proxying a metered action (chat/flow/office/compute/upload) to the
+        AI; brain decides against the DB, keyed to the metadata user_id — NEVER a
+        request body. It atomically reserves against the usage ledger (idempotent
+        on the key), so a client editing its bundle cannot grant itself free usage.
+        """
+        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        context.set_details('Method not implemented!')
+        raise NotImplementedError('Method not implemented!')
+
+    def GetEntitlements(self, request, context):
+        """Read-only plan + current-window usage snapshot for the signed-in user, for
+        the frontend to DISPLAY (it is display-only; enforcement never trusts it).
+        """
+        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        context.set_details('Method not implemented!')
+        raise NotImplementedError('Method not implemented!')
+
 
 def add_PlatformServiceServicer_to_server(servicer, server):
     rpc_method_handlers = {
@@ -381,6 +411,16 @@ def add_PlatformServiceServicer_to_server(servicer, server):
                     servicer.GetTranscript,
                     request_deserializer=verity_dot_v1_dot_platform__pb2.TranscriptRequest.FromString,
                     response_serializer=verity_dot_v1_dot_platform__pb2.TranscriptResponse.SerializeToString,
+            ),
+            'CheckEntitlement': grpc.unary_unary_rpc_method_handler(
+                    servicer.CheckEntitlement,
+                    request_deserializer=verity_dot_v1_dot_platform__pb2.CheckEntitlementRequest.FromString,
+                    response_serializer=verity_dot_v1_dot_platform__pb2.CheckEntitlementResponse.SerializeToString,
+            ),
+            'GetEntitlements': grpc.unary_unary_rpc_method_handler(
+                    servicer.GetEntitlements,
+                    request_deserializer=verity_dot_v1_dot_platform__pb2.Empty.FromString,
+                    response_serializer=verity_dot_v1_dot_platform__pb2.EntitlementsResponse.SerializeToString,
             ),
     }
     generic_handler = grpc.method_handlers_generic_handler(
@@ -928,6 +968,60 @@ class PlatformService:
             '/verity.v1.PlatformService/GetTranscript',
             verity_dot_v1_dot_platform__pb2.TranscriptRequest.SerializeToString,
             verity_dot_v1_dot_platform__pb2.TranscriptResponse.FromString,
+            options,
+            channel_credentials,
+            insecure,
+            call_credentials,
+            compression,
+            wait_for_ready,
+            timeout,
+            metadata,
+            _registered_method=True)
+
+    @staticmethod
+    def CheckEntitlement(request,
+            target,
+            options=(),
+            channel_credentials=None,
+            call_credentials=None,
+            insecure=False,
+            compression=None,
+            wait_for_ready=None,
+            timeout=None,
+            metadata=None):
+        return grpc.experimental.unary_unary(
+            request,
+            target,
+            '/verity.v1.PlatformService/CheckEntitlement',
+            verity_dot_v1_dot_platform__pb2.CheckEntitlementRequest.SerializeToString,
+            verity_dot_v1_dot_platform__pb2.CheckEntitlementResponse.FromString,
+            options,
+            channel_credentials,
+            insecure,
+            call_credentials,
+            compression,
+            wait_for_ready,
+            timeout,
+            metadata,
+            _registered_method=True)
+
+    @staticmethod
+    def GetEntitlements(request,
+            target,
+            options=(),
+            channel_credentials=None,
+            call_credentials=None,
+            insecure=False,
+            compression=None,
+            wait_for_ready=None,
+            timeout=None,
+            metadata=None):
+        return grpc.experimental.unary_unary(
+            request,
+            target,
+            '/verity.v1.PlatformService/GetEntitlements',
+            verity_dot_v1_dot_platform__pb2.Empty.SerializeToString,
+            verity_dot_v1_dot_platform__pb2.EntitlementsResponse.FromString,
             options,
             channel_credentials,
             insecure,
