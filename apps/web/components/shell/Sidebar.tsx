@@ -19,11 +19,11 @@ import { ThemeToggle } from "./ThemeToggle";
 import { AccountRow } from "@/components/auth/AccountRow";
 
 const NAV = [
-  { href: "/", label: "Chat", Icon: ChatTeardropText },
-  { href: "/flows", label: "Flows", Icon: FlowArrow },
-  { href: "/offices", label: "Offices", Icon: Buildings },
-  { href: "/compute", label: "Compute", Icon: Cpu },
-  { href: "/settings", label: "Settings", Icon: SlidersHorizontal },
+  { href: "/app", label: "Chat", Icon: ChatTeardropText },
+  { href: "/app/flows", label: "Flows", Icon: FlowArrow },
+  { href: "/app/offices", label: "Offices", Icon: Buildings },
+  { href: "/app/compute", label: "Compute", Icon: Cpu },
+  { href: "/app/settings", label: "Settings", Icon: SlidersHorizontal },
 ];
 
 function timeAgo(iso: string): string {
@@ -84,13 +84,13 @@ export function Sidebar({ onNavigate }: { onNavigate?: () => void }) {
 
   const goToConversation = (id: string) => {
     selectConversation(id);
-    if (pathname !== "/") router.push("/");
+    if (pathname !== "/app") router.push("/app");
     onNavigate?.();
   };
 
   const startNew = () => {
     newConversation();
-    if (pathname !== "/") router.push("/");
+    if (pathname !== "/app") router.push("/app");
     onNavigate?.();
   };
 
@@ -118,7 +118,7 @@ export function Sidebar({ onNavigate }: { onNavigate?: () => void }) {
       {/* Primary navigation. */}
       <nav className="flex flex-col gap-1" aria-label="Primary">
         {NAV.map(({ href, label, Icon }) => {
-          const active = href === "/" ? pathname === "/" : pathname.startsWith(href);
+          const active = href === "/app" ? pathname === "/app" : pathname.startsWith(href);
           return (
             <Link
               key={href}
@@ -150,7 +150,7 @@ export function Sidebar({ onNavigate }: { onNavigate?: () => void }) {
             {conversations.map((c) => (
               <div
                 key={c.id}
-                className={clsx("conv-row", c.id === currentId && pathname === "/" && "conv-row--active")}
+                className={clsx("conv-row", c.id === currentId && pathname === "/app" && "conv-row--active")}
                 role="button"
                 tabIndex={0}
                 onClick={() => editingId !== c.id && goToConversation(c.id)}

@@ -34,7 +34,7 @@ export function BranchMenu({ messageId }: { messageId: string }) {
     const runId = await branch(messageId, kind);
     setHandoff({ kind, brief, source: "chat", runId });
     close();
-    router.push(kind === "flow" ? "/flows" : "/offices");
+    router.push(kind === "flow" ? "/app/flows" : "/app/offices");
   };
 
   return (

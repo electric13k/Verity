@@ -1,0 +1,561 @@
+/* ------------------------------------------------------------------ *
+ * Verity marketing — the public catalogue. Gallery Matcha register,
+ * editorial asymmetry, generous space. Tokens only (--v-*), glass kit,
+ * color-mix — no raw hex. Loaded ONLY by the (marketing) route group,
+ * so none of this reaches the app bundle.
+ * ------------------------------------------------------------------ */
+
+/* The app owns a fixed viewport (body overflow:hidden). The catalogue is a
+   scrolling document — release the body so it (and Lenis) can scroll. */
+body:has(.mkt) {
+  overflow-y: auto;
+  overflow-x: hidden;
+  height: auto;
+  min-height: 100%;
+}
+html:has(.mkt) {
+  height: auto;
+  scroll-behavior: smooth;
+}
+/* Lenis owns the smooth scroll when active; disable native smooth then. */
+html.lenis:has(.mkt) { scroll-behavior: auto; }
+html.lenis, html.lenis body { height: auto; }
+.lenis.lenis-smooth { scroll-behavior: auto !important; }
+.lenis.lenis-smooth [data-lenis-prevent] { overscroll-behavior: contain; }
+.lenis.lenis-stopped { overflow: hidden; }
+
+.mkt {
+  position: relative;
+  z-index: 0;
+  width: 100%;
+  color: var(--v-ink);
+  font-family: var(--v-font-body);
+}
+
+/* Reading measure + editorial gutters. */
+.mkt-wrap {
+  width: min(1200px, 100% - 2 * var(--v-space-5));
+  margin-inline: auto;
+}
+@media (max-width: 720px) {
+  .mkt-wrap { width: calc(100% - 2 * var(--v-space-4)); }
+}
+
+.mkt-section {
+  position: relative;
+  padding-block: clamp(var(--v-space-6), 11vh, 9rem);
+}
+
+/* Structural label — mono eyebrow, doubles as an exhibit tag. */
+.mkt-eyebrow {
+  font-family: var(--v-font-mono);
+  font-size: 0.6875rem;
+  letter-spacing: 0.22em;
+  text-transform: uppercase;
+  color: color-mix(in oklab, var(--v-ink) 50%, transparent);
+  display: inline-flex;
+  align-items: center;
+  gap: 0.6em;
+}
+.mkt-eyebrow::before {
+  content: "";
+  width: 1.6rem;
+  height: 1px;
+  background: rgb(var(--hairline) / 0.7);
+}
+
+.mkt-h2 {
+  font-family: var(--v-font-display);
+  font-optical-sizing: auto;
+  font-weight: 420;
+  letter-spacing: -0.02em;
+  line-height: 1.02;
+  font-size: clamp(2rem, 5.2vw, 3.6rem);
+  max-width: 20ch;
+}
+.mkt-lede {
+  font-size: clamp(1.05rem, 1.6vw, 1.3rem);
+  line-height: 1.55;
+  color: color-mix(in oklab, var(--v-ink) 74%, transparent);
+  max-width: 46ch;
+}
+.mkt-em { color: var(--v-matcha); font-style: normal; }
+
+/* ---- Navigation --------------------------------------------------- */
+.mkt-nav {
+  position: fixed;
+  inset: 0 0 auto 0;
+  z-index: 50;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--v-space-4);
+  padding: var(--v-space-3) clamp(var(--v-space-4), 4vw, var(--v-space-6));
+  transition: padding var(--v-motion-base) var(--v-motion-ease);
+}
+.mkt-nav__inner {
+  width: min(1200px, 100%);
+  margin-inline: auto;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--v-space-4);
+  padding: var(--v-space-2) var(--v-space-3) var(--v-space-2) var(--v-space-4);
+  border-radius: var(--v-radius-glass);
+  transition: background var(--v-motion-base) var(--v-motion-ease),
+    box-shadow var(--v-motion-base) var(--v-motion-ease),
+    backdrop-filter var(--v-motion-base) var(--v-motion-ease);
+}
+.mkt-nav--scrolled .mkt-nav__inner {
+  background: rgb(var(--glass-tint) / var(--glass-fill));
+  backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-sat));
+  -webkit-backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-sat));
+  box-shadow:
+    inset 0 1px 0 0 rgb(var(--glass-edge-hi) / var(--glass-edge-hi-a)),
+    0 8px 24px -14px rgb(var(--shadow-cast) / 0.3);
+}
+.mkt-brand {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 0.5rem;
+  text-decoration: none;
+  color: var(--v-ink);
+}
+.mkt-brand__mark { font-family: var(--v-font-display); font-weight: 500; font-size: 1.3rem; letter-spacing: -0.01em; }
+.mkt-brand__tag {
+  font-family: var(--v-font-mono);
+  font-size: 0.5625rem;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+  color: color-mix(in oklab, var(--v-ink) 48%, transparent);
+}
+.mkt-nav__links { display: flex; align-items: center; gap: 0.35rem; }
+.mkt-nav__link {
+  position: relative;
+  padding: 0.4rem 0.7rem;
+  border-radius: var(--v-radius-sm);
+  font-size: 0.9rem;
+  text-decoration: none;
+  color: color-mix(in oklab, var(--v-ink) 72%, transparent);
+  transition: color var(--v-motion-fast) var(--v-motion-ease),
+    background var(--v-motion-fast) var(--v-motion-ease);
+}
+.mkt-nav__link:hover { color: var(--v-ink); background: rgb(var(--glass-tint) / 0.4); }
+.mkt-nav__link--on { color: var(--v-matcha); }
+.mkt-nav__right { display: flex; align-items: center; gap: 0.6rem; }
+@media (max-width: 860px) {
+  .mkt-nav__links { display: none; }
+}
+
+/* ---- Buttons (marketing scale, built on the glass kit) ------------ */
+.mkt-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.72rem 1.15rem;
+  border-radius: var(--v-radius-md);
+  font-size: 0.95rem;
+  font-weight: 500;
+  text-decoration: none;
+  cursor: pointer;
+  border: 1px solid transparent;
+  transition: transform var(--v-motion-fast) var(--v-motion-ease),
+    box-shadow var(--v-motion-base) var(--v-motion-ease),
+    background var(--v-motion-fast) var(--v-motion-ease);
+  will-change: transform;
+}
+.mkt-btn--primary {
+  background: var(--v-matcha);
+  color: var(--v-porcelain);
+  box-shadow: 0 10px 30px -12px color-mix(in oklab, var(--v-matcha) 70%, transparent);
+}
+:root[data-theme="dark"] .mkt-btn--primary { color: #101210; }
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) .mkt-btn--primary { color: #101210; }
+}
+.mkt-btn--primary:hover { box-shadow: 0 16px 40px -12px color-mix(in oklab, var(--v-matcha) 78%, transparent); }
+.mkt-btn--ghost {
+  background: rgb(var(--glass-tint) / 0.4);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  border-color: rgb(var(--hairline) / 0.4);
+  color: var(--v-ink);
+}
+.mkt-btn--ghost:hover { border-color: rgb(var(--hairline) / 0.9); }
+.mkt-btn--sm { padding: 0.5rem 0.85rem; font-size: 0.875rem; }
+
+/* ---- Scroll progress rail ----------------------------------------- */
+.mkt-progress {
+  position: fixed;
+  top: 0; left: 0;
+  height: 2px;
+  width: 100%;
+  transform: scaleX(0);
+  transform-origin: 0 50%;
+  background: linear-gradient(90deg, var(--v-matcha), var(--v-chai), var(--v-brass));
+  z-index: 60;
+  pointer-events: none;
+}
+
+/* ---- Hero --------------------------------------------------------- */
+.hero {
+  position: relative;
+  min-height: 100vh;
+  min-height: 100svh;
+  display: grid;
+  align-content: center;
+  padding-top: clamp(6rem, 12vh, 9rem);
+  padding-bottom: var(--v-space-6);
+}
+.hero__grid {
+  display: grid;
+  grid-template-columns: 1.35fr 0.9fr;
+  gap: clamp(var(--v-space-5), 5vw, var(--v-space-6));
+  align-items: center;
+}
+@media (max-width: 940px) {
+  .hero__grid { grid-template-columns: 1fr; }
+}
+.hero__title {
+  font-family: var(--v-font-display);
+  font-optical-sizing: auto;
+  font-weight: 400;
+  letter-spacing: -0.028em;
+  line-height: 0.98;
+  font-size: clamp(2.7rem, 7.4vw, 5.6rem);
+  margin: var(--v-space-4) 0 var(--v-space-4);
+}
+.hero__title .word {
+  display: inline-block;
+  margin-right: 0.24em;
+  will-change: transform, opacity;
+}
+.hero__title .accent { color: var(--v-matcha); font-style: italic; }
+.hero__lede {
+  font-size: clamp(1.1rem, 1.7vw, 1.4rem);
+  line-height: 1.5;
+  color: color-mix(in oklab, var(--v-ink) 76%, transparent);
+  max-width: 40ch;
+}
+.hero__actions { display: flex; flex-wrap: wrap; gap: var(--v-space-3); margin-top: var(--v-space-5); }
+.hero__meta {
+  display: flex; flex-wrap: wrap; gap: var(--v-space-4);
+  margin-top: var(--v-space-5);
+}
+.hero__meta-item { display: flex; flex-direction: column; gap: 0.15rem; }
+.hero__meta-k { font-family: var(--v-font-display); font-size: 1.6rem; font-weight: 500; line-height: 1; }
+.hero__meta-v {
+  font-family: var(--v-font-mono); font-size: 0.625rem; letter-spacing: 0.14em;
+  text-transform: uppercase; color: color-mix(in oklab, var(--v-ink) 52%, transparent);
+}
+
+/* The floating glass "specimen" — a live confidence read card. */
+.hero__specimen { position: relative; }
+.spec-card {
+  padding: var(--v-space-4);
+  display: flex;
+  flex-direction: column;
+  gap: var(--v-space-3);
+  will-change: transform;
+}
+.spec-card__head { display: flex; align-items: center; justify-content: space-between; gap: var(--v-space-3); }
+.spec-card__role { display: flex; align-items: center; gap: 0.55rem; }
+.spec-card__avatar {
+  width: 1.9rem; height: 1.9rem; border-radius: 50%;
+  display: grid; place-items: center;
+  background: color-mix(in oklab, var(--v-matcha) 22%, transparent);
+  color: var(--v-matcha);
+}
+.spec-card__name { font-size: 0.9rem; font-weight: 500; }
+.spec-card__sub { font-family: var(--v-font-mono); font-size: 0.6rem; letter-spacing: 0.1em; text-transform: uppercase; color: color-mix(in oklab, var(--v-ink) 48%, transparent); }
+.spec-card__body { font-size: 0.92rem; line-height: 1.5; color: color-mix(in oklab, var(--v-ink) 82%, transparent); }
+.spec-card__conf {
+  display: flex; align-items: center; gap: 0.7rem;
+  padding-top: var(--v-space-3);
+  border-top: 1px solid rgb(var(--hairline) / 0.28);
+}
+.spec-meter { flex: 1; height: 5px; border-radius: 3px; background: color-mix(in oklab, var(--v-fog) 60%, transparent); overflow: hidden; }
+.spec-meter__fill {
+  height: 100%; width: 0;
+  border-radius: 3px;
+  background: linear-gradient(90deg, var(--v-brass), var(--v-chai) 55%, var(--v-matcha));
+}
+.spec-card__pct { font-family: var(--v-font-mono); font-size: 0.8rem; font-weight: 500; color: var(--v-matcha); }
+.spec-card__label { font-family: var(--v-font-mono); font-size: 0.6rem; letter-spacing: 0.14em; text-transform: uppercase; color: color-mix(in oklab, var(--v-ink) 50%, transparent); }
+
+.hero__cue {
+  position: absolute;
+  left: 50%; bottom: var(--v-space-4);
+  transform: translateX(-50%);
+  display: flex; flex-direction: column; align-items: center; gap: 0.4rem;
+  font-family: var(--v-font-mono); font-size: 0.56rem; letter-spacing: 0.24em; text-transform: uppercase;
+  color: color-mix(in oklab, var(--v-ink) 46%, transparent);
+}
+.hero__cue span { animation: mkt-cue 2.4s var(--v-motion-ease) infinite; }
+@keyframes mkt-cue { 0%,100% { transform: translateY(0); opacity: 0.5; } 50% { transform: translateY(5px); opacity: 1; } }
+
+/* ---- Narrative (scroll-scrubbed word highlight) ------------------- */
+.narrative { text-align: left; }
+.narrative__text {
+  font-family: var(--v-font-display);
+  font-weight: 400;
+  letter-spacing: -0.018em;
+  line-height: 1.22;
+  font-size: clamp(1.6rem, 4vw, 3rem);
+  max-width: 24ch;
+}
+.narrative__text .word {
+  display: inline-block;
+  margin-right: 0.22em;
+  color: color-mix(in oklab, var(--v-ink) 20%, transparent);
+  transition: color 0.1s linear;
+}
+.narrative__text .word.on { color: var(--v-ink); }
+.narrative__text .word.key.on { color: var(--v-matcha); }
+
+/* ---- Capability showcase (pinned specimen + scrolling plates) ----- */
+.showcase__head { max-width: 52ch; margin-bottom: var(--v-space-6); }
+.showcase__grid {
+  display: grid;
+  grid-template-columns: 0.95fr 1.05fr;
+  gap: clamp(var(--v-space-5), 5vw, var(--v-space-6));
+  align-items: start;
+}
+@media (max-width: 900px) { .showcase__grid { grid-template-columns: 1fr; } }
+.showcase__pin { position: sticky; top: 18vh; }
+@media (max-width: 900px) { .showcase__pin { position: relative; top: 0; margin-bottom: var(--v-space-5); } }
+.showcase__stage {
+  aspect-ratio: 4 / 3.2;
+  padding: var(--v-space-4);
+  display: grid;
+  place-items: center;
+  overflow: hidden;
+}
+.showcase__plates { display: flex; flex-direction: column; gap: var(--v-space-3); }
+.plate {
+  padding: var(--v-space-4);
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: var(--v-space-4);
+  align-items: start;
+  cursor: default;
+  transition: transform var(--v-motion-base) var(--v-motion-ease);
+}
+.plate__no {
+  font-family: var(--v-font-mono);
+  font-size: 0.7rem;
+  letter-spacing: 0.1em;
+  color: color-mix(in oklab, var(--v-ink) 42%, transparent);
+  padding-top: 0.35rem;
+}
+.plate__no b { color: var(--v-brass); font-weight: 500; }
+.plate__ic {
+  display: grid; place-items: center;
+  width: 2.4rem; height: 2.4rem; border-radius: var(--v-radius-md);
+  color: var(--v-matcha);
+  background: color-mix(in oklab, var(--v-matcha) 14%, transparent);
+}
+.plate__head { display: flex; align-items: center; gap: 0.7rem; }
+.plate__title { font-family: var(--v-font-display); font-size: 1.35rem; font-weight: 500; letter-spacing: -0.01em; }
+.plate__body { margin-top: 0.45rem; font-size: 0.95rem; line-height: 1.5; color: color-mix(in oklab, var(--v-ink) 72%, transparent); }
+.plate__tags { display: flex; flex-wrap: wrap; gap: 0.4rem; margin-top: var(--v-space-3); }
+.plate__tag {
+  font-family: var(--v-font-mono); font-size: 0.6rem; letter-spacing: 0.08em; text-transform: uppercase;
+  padding: 0.2rem 0.5rem; border-radius: 999px;
+  color: color-mix(in oklab, var(--v-ink) 62%, transparent);
+  border: 1px solid rgb(var(--hairline) / 0.35);
+}
+
+/* Stage glyphs — small self-drawn diagrams per capability, palette only. */
+.glyph { width: 100%; height: 100%; }
+.glyph .stroke { stroke: var(--v-matcha); fill: none; stroke-width: 1.4; }
+.glyph .stroke-2 { stroke: var(--v-chai); fill: none; stroke-width: 1.4; }
+.glyph .fillm { fill: color-mix(in oklab, var(--v-matcha) 20%, transparent); }
+.glyph .fillc { fill: color-mix(in oklab, var(--v-chai) 22%, transparent); }
+.glyph .dot { fill: var(--v-matcha); }
+.glyph .dim { fill: color-mix(in oklab, var(--v-ink) 30%, transparent); }
+.glyph text { font-family: var(--v-font-mono); fill: color-mix(in oklab, var(--v-ink) 60%, transparent); }
+
+/* ---- Security grid ------------------------------------------------ */
+.sec-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+  gap: var(--v-space-4);
+  margin-top: var(--v-space-6);
+}
+.sec-card {
+  padding: var(--v-space-4);
+  display: flex; flex-direction: column; gap: var(--v-space-3);
+}
+.sec-card__ic { color: var(--v-chai); }
+.sec-card__title { font-family: var(--v-font-display); font-size: 1.2rem; font-weight: 500; }
+.sec-card__body { font-size: 0.92rem; line-height: 1.5; color: color-mix(in oklab, var(--v-ink) 72%, transparent); }
+.sec-card__mono {
+  margin-top: auto;
+  font-family: var(--v-font-mono); font-size: 0.6rem; letter-spacing: 0.1em; text-transform: uppercase;
+  color: color-mix(in oklab, var(--v-ink) 46%, transparent);
+}
+
+/* ---- Confidence highlight ----------------------------------------- */
+.conf {
+  display: grid;
+  grid-template-columns: 1fr 0.85fr;
+  gap: clamp(var(--v-space-5), 5vw, var(--v-space-6));
+  align-items: center;
+}
+@media (max-width: 860px) { .conf { grid-template-columns: 1fr; } }
+.conf-dial { display: grid; place-items: center; padding: var(--v-space-5); }
+.conf-dial svg { width: min(320px, 78vw); height: auto; }
+.conf-dial__ring-bg { fill: none; stroke: color-mix(in oklab, var(--v-fog) 60%, transparent); stroke-width: 10; }
+.conf-dial__ring { fill: none; stroke: var(--v-matcha); stroke-width: 10; stroke-linecap: round; }
+.conf-dial__num { font-family: var(--v-font-display); font-size: 3.2rem; font-weight: 500; fill: var(--v-ink); }
+.conf-dial__lbl { font-family: var(--v-font-mono); font-size: 0.62rem; letter-spacing: 0.16em; fill: color-mix(in oklab, var(--v-ink) 52%, transparent); }
+.conf-bands { display: flex; flex-direction: column; gap: var(--v-space-3); margin-top: var(--v-space-4); }
+.conf-band { display: flex; align-items: center; gap: 0.7rem; font-size: 0.9rem; }
+.conf-band__dot { width: 0.7rem; height: 0.7rem; border-radius: 50%; }
+
+/* ---- Compute network --------------------------------------------- */
+.net {
+  display: grid;
+  grid-template-columns: 1.1fr 0.9fr;
+  gap: clamp(var(--v-space-5), 5vw, var(--v-space-6));
+  align-items: center;
+}
+@media (max-width: 860px) { .net { grid-template-columns: 1fr; } }
+.net-stage { padding: var(--v-space-4); }
+.net-stage svg { width: 100%; height: auto; }
+.net-stats { display: grid; grid-template-columns: repeat(3, 1fr); gap: var(--v-space-4); margin-top: var(--v-space-5); }
+.stat__k { font-family: var(--v-font-display); font-size: clamp(1.8rem, 4vw, 2.6rem); font-weight: 500; line-height: 1; }
+.stat__v { font-family: var(--v-font-mono); font-size: 0.6rem; letter-spacing: 0.12em; text-transform: uppercase; color: color-mix(in oklab, var(--v-ink) 52%, transparent); margin-top: 0.3rem; }
+
+/* ---- Marquee (principles ticker) ---------------------------------- */
+.marquee { overflow: hidden; width: 100%; -webkit-mask-image: linear-gradient(90deg, transparent, #000 8%, #000 92%, transparent); mask-image: linear-gradient(90deg, transparent, #000 8%, #000 92%, transparent); }
+.marquee__track { display: inline-flex; gap: var(--v-space-5); white-space: nowrap; will-change: transform; animation: mkt-marquee 32s linear infinite; }
+.marquee__item {
+  display: inline-flex; align-items: center; gap: 0.7rem;
+  font-family: var(--v-font-display); font-size: clamp(1.3rem, 3vw, 2rem); font-weight: 460;
+  color: color-mix(in oklab, var(--v-ink) 70%, transparent);
+}
+.marquee__item::before { content: ""; width: 0.4rem; height: 0.4rem; border-radius: 50%; background: var(--v-brass); }
+@keyframes mkt-marquee { from { transform: translateX(0); } to { transform: translateX(-50%); } }
+
+/* ---- Pricing ------------------------------------------------------ */
+.tier-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+  gap: var(--v-space-4);
+  margin-top: var(--v-space-6);
+  align-items: stretch;
+}
+.tier {
+  padding: var(--v-space-5) var(--v-space-4);
+  display: flex; flex-direction: column; gap: var(--v-space-3);
+}
+.tier--feature { }
+.tier__name { font-family: var(--v-font-display); font-size: 1.5rem; font-weight: 500; }
+.tier__price { display: flex; align-items: baseline; gap: 0.35rem; }
+.tier__amount { font-family: var(--v-font-display); font-size: 2.6rem; font-weight: 500; letter-spacing: -0.02em; }
+.tier__per { font-family: var(--v-font-mono); font-size: 0.7rem; letter-spacing: 0.08em; color: color-mix(in oklab, var(--v-ink) 52%, transparent); }
+.tier__note { font-size: 0.88rem; color: color-mix(in oklab, var(--v-ink) 66%, transparent); min-height: 2.4em; }
+.tier__list { list-style: none; padding: 0; margin: var(--v-space-3) 0 var(--v-space-4); display: flex; flex-direction: column; gap: 0.6rem; }
+.tier__list li { display: flex; gap: 0.6rem; align-items: flex-start; font-size: 0.9rem; line-height: 1.4; }
+.tier__list li svg { flex: none; margin-top: 0.15rem; color: var(--v-matcha); }
+.tier__cta { margin-top: auto; }
+.tier__badge {
+  align-self: flex-start;
+  font-family: var(--v-font-mono); font-size: 0.58rem; letter-spacing: 0.14em; text-transform: uppercase;
+  padding: 0.25rem 0.6rem; border-radius: 999px;
+  color: var(--v-matcha); background: color-mix(in oklab, var(--v-matcha) 16%, transparent);
+}
+
+/* ---- Docs index --------------------------------------------------- */
+.doc-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  gap: var(--v-space-4);
+  margin-top: var(--v-space-6);
+}
+.doc-card {
+  padding: var(--v-space-4);
+  display: flex; flex-direction: column; gap: 0.6rem;
+  text-decoration: none; color: var(--v-ink);
+  transition: transform var(--v-motion-base) var(--v-motion-ease);
+}
+.doc-card:hover { transform: translateY(-3px); }
+.doc-card__no { font-family: var(--v-font-mono); font-size: 0.62rem; letter-spacing: 0.14em; color: var(--v-brass); }
+.doc-card__title { font-family: var(--v-font-display); font-size: 1.2rem; font-weight: 500; display: flex; align-items: center; gap: 0.5rem; justify-content: space-between; }
+.doc-card__body { font-size: 0.9rem; line-height: 1.5; color: color-mix(in oklab, var(--v-ink) 70%, transparent); }
+.changelog { margin-top: var(--v-space-6); display: flex; flex-direction: column; gap: var(--v-space-4); }
+.cl-row { display: grid; grid-template-columns: 8rem 1fr; gap: var(--v-space-4); padding-bottom: var(--v-space-4); border-bottom: 1px solid rgb(var(--hairline) / 0.22); }
+@media (max-width: 640px) { .cl-row { grid-template-columns: 1fr; gap: 0.5rem; } }
+.cl-when { font-family: var(--v-font-mono); font-size: 0.68rem; letter-spacing: 0.08em; color: color-mix(in oklab, var(--v-ink) 52%, transparent); }
+.cl-tag { font-family: var(--v-font-mono); font-size: 0.58rem; letter-spacing: 0.1em; text-transform: uppercase; color: var(--v-matcha); }
+.cl-title { font-weight: 500; margin: 0.2rem 0; }
+.cl-body { font-size: 0.9rem; line-height: 1.5; color: color-mix(in oklab, var(--v-ink) 70%, transparent); }
+
+/* ---- About prose -------------------------------------------------- */
+.about-lead {
+  font-family: var(--v-font-display);
+  font-weight: 400; letter-spacing: -0.02em; line-height: 1.18;
+  font-size: clamp(1.8rem, 4.4vw, 3.2rem);
+  max-width: 22ch;
+}
+.about-cols {
+  display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  gap: var(--v-space-5); margin-top: var(--v-space-6);
+}
+.about-p { font-size: 1.02rem; line-height: 1.65; color: color-mix(in oklab, var(--v-ink) 78%, transparent); }
+.about-p + .about-p { margin-top: var(--v-space-4); }
+.principle-list { list-style: none; padding: 0; margin: var(--v-space-5) 0 0; display: grid; gap: var(--v-space-4); }
+.principle {
+  display: grid; grid-template-columns: 2.5rem 1fr; gap: var(--v-space-4); align-items: baseline;
+  padding-bottom: var(--v-space-4); border-bottom: 1px solid rgb(var(--hairline) / 0.22);
+}
+.principle__no { font-family: var(--v-font-mono); font-size: 0.72rem; color: var(--v-brass); }
+.principle__t { font-family: var(--v-font-display); font-size: 1.25rem; font-weight: 500; }
+.principle__b { font-size: 0.95rem; line-height: 1.55; color: color-mix(in oklab, var(--v-ink) 70%, transparent); margin-top: 0.3rem; }
+
+/* ---- CTA band ----------------------------------------------------- */
+.cta-band { text-align: center; padding: clamp(var(--v-space-6), 12vh, 8rem) var(--v-space-4); }
+.cta-band__title {
+  font-family: var(--v-font-display); font-weight: 400; letter-spacing: -0.025em; line-height: 1.0;
+  font-size: clamp(2.4rem, 7vw, 5rem); margin-bottom: var(--v-space-4);
+}
+.cta-band__lede { color: color-mix(in oklab, var(--v-ink) 72%, transparent); max-width: 40ch; margin: 0 auto var(--v-space-5); font-size: 1.1rem; line-height: 1.5; }
+.cta-band__actions { display: flex; gap: var(--v-space-3); justify-content: center; flex-wrap: wrap; }
+
+/* ---- Footer ------------------------------------------------------- */
+.mkt-footer {
+  border-top: 1px solid rgb(var(--hairline) / 0.25);
+  padding: var(--v-space-6) 0 var(--v-space-5);
+  margin-top: var(--v-space-6);
+}
+.mkt-footer__grid {
+  display: grid;
+  grid-template-columns: 1.4fr repeat(3, 1fr);
+  gap: var(--v-space-5);
+}
+@media (max-width: 760px) { .mkt-footer__grid { grid-template-columns: 1fr 1fr; } }
+.mkt-footer__brand { display: flex; flex-direction: column; gap: 0.7rem; max-width: 30ch; }
+.mkt-footer__blurb { font-size: 0.9rem; line-height: 1.5; color: color-mix(in oklab, var(--v-ink) 62%, transparent); }
+.mkt-footer__col h4 { font-family: var(--v-font-mono); font-size: 0.62rem; letter-spacing: 0.16em; text-transform: uppercase; color: color-mix(in oklab, var(--v-ink) 50%, transparent); margin: 0 0 var(--v-space-3); }
+.mkt-footer__col a { display: block; text-decoration: none; color: color-mix(in oklab, var(--v-ink) 74%, transparent); font-size: 0.9rem; padding: 0.25rem 0; }
+.mkt-footer__col a:hover { color: var(--v-matcha); }
+.mkt-footer__base {
+  display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: var(--v-space-3);
+  margin-top: var(--v-space-5); padding-top: var(--v-space-4);
+  border-top: 1px solid rgb(var(--hairline) / 0.18);
+  font-family: var(--v-font-mono); font-size: 0.62rem; letter-spacing: 0.06em;
+  color: color-mix(in oklab, var(--v-ink) 46%, transparent);
+}
+
+/* ---- Reveal fallback: content is visible by default (no-JS / SSR).
+   The motion controller hides+reveals only when GSAP is active, and
+   reduced-motion never hides. Nothing here depends on JS to be legible. */
+
+@media (prefers-reduced-motion: reduce) {
+  html:has(.mkt), html.lenis:has(.mkt) { scroll-behavior: auto; }
+  .hero__cue span, .marquee__track { animation: none !important; }
+  .narrative__text .word { color: var(--v-ink); }
+  .narrative__text .word.key { color: var(--v-matcha); }
+}

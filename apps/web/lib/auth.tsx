@@ -21,9 +21,10 @@ import { getSupabase } from "./supabase/client";
 import { AUTH_ENABLED } from "./supabase/config";
 import { setAuthToken } from "./api/config";
 
-// Where an OAuth round-trip returns to. Static-export safe (read at call time).
+// Where an OAuth round-trip returns to: the signed-in app at /app (the public
+// landing now owns the origin). Static-export safe (read at call time).
 const oauthRedirect = () =>
-  typeof window !== "undefined" ? window.location.origin : undefined;
+  typeof window !== "undefined" ? `${window.location.origin}/app` : undefined;
 
 export type OAuthProvider = "github";
 
